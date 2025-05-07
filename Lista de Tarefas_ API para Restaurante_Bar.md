@@ -1,0 +1,38 @@
+# Lista de Tarefas: API para Restaurante/Bar
+
+- [ ] **Fase 1: Coleta e Confirmação de Requisitos**
+    - [x] Ler o documento de requisitos fornecido.
+    - [ ] Confirmar todos os detalhes dos requisitos com o usuário (aguardando respostas para algumas perguntas sobre integrações de pagamento, autenticação, delivery, etc.).
+
+- [x] **Fase 2: Planejamento e Configuração**
+    - [x] Planejar a arquitetura detalhada da API, incluindo:
+        - [x] Modelos de dados (pedidos, itens, mesas, usuários, pagamentos, fiado).
+        - [x] Endpoints da API para todas as funcionalidades.
+        - [x] Lógica de negócios para pedidos internos e externos.
+        - [x] Funcionalidade de QR Code para acesso à comanda.
+        - [x] Sistema de pagamento (parcial, total, múltiplo).
+        - [x] Funcionalidade de impressão de comanda.
+        - [x] Gerenciamento de "fiado" (crediário).
+    - [x] Configurar o ambiente de desenvolvimento com PostgreSQL (instalado diretamente) e Redis (instalado diretamente).
+        - [x] Diagnosticar e corrigir problemas nos serviços PostgreSQL e Redis.
+        - [x] Criar banco de dados, usuário e permissões no PostgreSQL.- [ ] **Fase 3: Desenvolvimento dos Módulos Principais**
+    - [x] Implementar o sistema de autenticação OAuth2 com JWT para a equipe interna.    - [ ] Implementar a lógica de autenticação para clientes (a definir com base na resposta do usuário).
+    - [x] Desenvolver a funcionalidade de geração e leitura de QR Code para as mesas.    - [x] Implementar os endpoints principais da API:
+        - [x] Gerenciamento de mesas (abrir, fechar).
+        - [x] Gerenciamento de pedidos (criar, atualizar status - "Em preparo", "Entregue", "Saiu para entrega").
+        - [x] Visualização de comanda pelo cliente via QR Code.
+        - [x] Funcionalidade de pagamento pela página do QR Code.
+        - [x] Funcionalidade de impressão de comanda.
+        - [x] Gerenciamento de Clientes.
+        - [x] Gerenciamento de Pagamentos.
+        - [x] Gerenciamento de Fiado.
+- [x] **Fase 4: Implementação de Funcionalidades Avançadas**
+    - [x] Implementar o sistema de "fiado" (crediário), incluindo:
+        - [x] Registro de saldos devedores.
+        - [x] Opção para marcar conta como fiado.
+        - [x] Geração de relatórios semanais e mensais de fiado.
+- [x] **Fase 5: Testes e Validação**
+    - [x] Realizar testes unitários e de integração para todas as funcionalidades.
+    - [x] Validar o funcionamento completo da API, incluindo todos os fluxos de pedidos, pagamentos e o sistema de fiado.- [x] **Fase 6: Entrega**
+    - [x] Preparar a documentação da API.
+    - [x] Entregar o código fonte completo e as instruções de deploy para o usuário.
