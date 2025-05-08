@@ -1,8 +1,8 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
-import uuid
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
+import uuid
 
 # --- Token Schemas ---
 class Token(BaseModel):
@@ -73,13 +73,13 @@ class ItemPedidoBase(BaseModel):
     observacoes_item: Optional[str] = None
 
 class ItemPedidoCreate(ItemPedidoBase):
-    pass # preco_unitario_momento and subtotal will be set in CRUD
+    pass  # preco_unitario_momento e subtotal serão definidos no backend
 
 class ItemPedido(ItemPedidoBase):
     id: uuid.UUID
     preco_unitario_momento: Decimal
     subtotal: Decimal
-    produto: Produto # To show product details
+    produto: Produto
 
     class Config:
         from_attributes = True
@@ -100,7 +100,7 @@ class Pedido(PedidoBase):
     data_ultima_atualizacao_status: datetime
     id_usuario_solicitante: Optional[uuid.UUID] = None
     itens_pedido: List[ItemPedido] = []
-    usuario_solicitante: Optional[Usuario] = None # To show who made the order
+    usuario_solicitante: Optional[Usuario] = None
 
     class Config:
         from_attributes = True
@@ -108,7 +108,7 @@ class Pedido(PedidoBase):
 # --- Pagamento Schemas ---
 class PagamentoBase(BaseModel):
     valor: Decimal
-    metodo_pagamento: str # Dinheiro, Cartão Crédito, Cartão Débito, Pix
+    metodo_pagamento: str  # Dinheiro, Cartão Crédito, Cartão Débito, Pix
     observacoes: Optional[str] = None
 
 class PagamentoCreate(PagamentoBase):
@@ -126,10 +126,9 @@ class Pagamento(PagamentoBase):
 
 # --- Comanda Schemas ---
 class ComandaBase(BaseModel):
-    pass # Most fields are derived or set internally
+    pass  # Campos preenchidos internamente
 
 class ComandaCreate(ComandaBase):
-    # id_mesa is passed via URL or context
     id_cliente_associado: Optional[uuid.UUID] = None
 
 class Comanda(ComandaBase):
@@ -143,7 +142,6 @@ class Comanda(ComandaBase):
     data_atualizacao: Optional[datetime] = None
     pedidos: List[Pedido] = []
     pagamentos: List[Pagamento] = []
-    # cliente_associado: Optional[Cliente] = None # If needed
 
     class Config:
         from_attributes = True
@@ -188,22 +186,21 @@ class Fiado(FiadoBase):
     data_criacao: datetime
     data_ultima_atualizacao: Optional[datetime] = None
     cliente: Cliente
-    comanda_origem: Comanda # To show details of the original comanda
+    comanda_origem: Comanda
 
     class Config:
         from_attributes = True
 
-# Schema for QR Code access (public)
+# --- Comanda Pública (via QR Code) ---
 class ComandaPublic(BaseModel):
     id: uuid.UUID
     numero_mesa: str
     valor_total: Decimal
     status_pagamento: str
-    pedidos: List[Pedido] = [] # Simplified pedido view if needed
+    pedidos: List[Pedido] = []
 
     class Config:
         from_attributes = True
-
 
 # --- Relatório Fiado Schemas ---
 class RelatorioFiadoItem(BaseModel):
@@ -211,7 +208,6 @@ class RelatorioFiadoItem(BaseModel):
     nome_cliente: Optional[str] = "Cliente não informado"
     valor_total_devido: Decimal
     quantidade_fiados_pendentes: int
-    # data_ultimo_fiado: Optional[datetime] = None # Could be useful
 
     class Config:
         from_attributes = True
@@ -225,4 +221,3 @@ class RelatorioFiado(BaseModel):
 
     class Config:
         from_attributes = True
-

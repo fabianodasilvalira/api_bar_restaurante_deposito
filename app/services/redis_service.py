@@ -1,71 +1,164 @@
-# app/services/redis_service.py
-import redis.asyncio as redis # Using asyncio version for FastAPI
+import redis.asyncio as redis
+from typing import Optional, AsyncIterator
 from app.core.config import settings
+from app.core.logging import logger
 
-class RedisClient:
-    def __init__(self, host: str = settings.REDIS_HOST, port: int = settings.REDIS_PORT):
-        self.host = host
-        self.port = port
+
+class RedisService:
+    def __init__(self):
         self._client = None
+        self._pubsub = None
+        self.connected = False
 
-    async def connect(self):
-        if not self._client:
-            try:
-                self._client = await redis.Redis(host=self.host, port=self.port, decode_responses=True)
-                # Test connection
-                await self._client.ping()
-                print(f"Conectado ao Redis em {self.host}:{self.port}")
-            except redis.exceptions.ConnectionError as e:
-                print(f"Falha ao conectar ao Redis: {e}")
-                self._client = None # Ensure client is None if connection failed
+    async def connect(self) -> bool:
+        """Estabelece conexão com o Redis"""
+        if self.connected:
+            return True
+
+        try:
+            self._client = redis.Redis(
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                password=settings.REDIS_PASSWORD,
+                db=settings.REDIS_DB,
+                decode_responses=True,
+                socket_timeout=5,
+                socket_connect_timeout=5,
+                retry_on_timeout=True
+            )
+
+            # Test connection
+            await self._client.ping()
+            self.connected = True
+            logger.info(f"Conexão Redis estabelecida em {settings.REDIS_HOST}:{settings.REDIS_PORT}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Falha na conexão Redis: {str(e)}")
+            self._client = None
+            self.connected = False
+            return False
 
     async def disconnect(self):
-        if self._client:
-            await self._client.close()
-            self._client = None
-            print("Desconectado do Redis.")
+        """Fecha a conexão com o Redis"""
+        if self._client and self.connected:
+            try:
+                if self._pubsub:
+                    await self._pubsub.close()
+                await self._client.close()
+                logger.info("Conexão Redis encerrada")
+            except Exception as e:
+                logger.error(f"Erro ao desconectar Redis: {str(e)}")
+            finally:
+                self._client = None
+                self._pubsub = None
+                self.connected = False
 
-    @property
-    async def client(self) -> Optional[redis.Redis]:
-        if not self._client:
-            await self.connect() # Attempt to connect if not already connected
-        return self._client
+    async def publish(self, channel: str, message: str) -> bool:
+        """
+        Publica mensagem em um canal Redis
+        Retorna True se bem sucedido, False caso contrário
+        """
+        if not self.connected and not await self.connect():
+            return False
 
-    async def publish_message(self, channel: str, message: str):
-        r = await self.client
-        if r:
-            await r.publish(channel, message)
-            print(f"Mensagem 	\"{message}\" publicada no canal 	\"{channel}\"")
-        else:
-            print(f"Não foi possível publicar mensagem: cliente Redis não conectado.")
+        try:
+            await self._client.publish(channel, message)
+            logger.debug(f"Mensagem publicada no canal {channel}: {message[:100]}...")
+            return True
+        except Exception as e:
+            logger.error(f"Erro ao publicar no Redis: {str(e)}")
+            self.connected = False
+            return False
 
-    async def subscribe_to_channel(self, channel: str):
-        r = await self.client
-        if r:
-            pubsub = r.pubsub()
-            await pubsub.subscribe(channel)
-            print(f"Inscrito no canal 	\"{channel}\"")
-            return pubsub
-        else:
-            print(f"Não foi possível inscrever-se no canal: cliente Redis não conectado.")
+    async def subscribe(self, channel: str) -> bool:
+        """
+        Inscreve em um canal Redis
+        Retorna True se bem sucedido, False caso contrário
+        """
+        if not self.connected and not await self.connect():
+            return False
+
+        try:
+            self._pubsub = self._client.pubsub()
+            await self._pubsub.subscribe(channel)
+            logger.info(f"Inscrito no canal Redis: {channel}")
+            return True
+        except Exception as e:
+            logger.error(f"Erro ao inscrever no Redis: {str(e)}")
+            self.connected = False
+            return False
+
+    async def listen(self) -> AsyncIterator[Optional[dict]]:
+        """
+        Gera mensagens recebidas dos canais inscritos
+        """
+        if not self._pubsub:
+            yield None
+
+        try:
+            async for message in self._pubsub.listen():
+                if message['type'] == 'message':
+                    yield message
+        except Exception as e:
+            logger.error(f"Erro ao escutar Redis: {str(e)}")
+            yield None
+
+    async def set_key(self, key: str, value: str, ttl: Optional[int] = None) -> bool:
+        """Armazena um valor com TTL opcional"""
+        if not self.connected and not await self.connect():
+            return False
+
+        try:
+            if ttl:
+                await self._client.setex(key, ttl, value)
+            else:
+                await self._client.set(key, value)
+            return True
+        except Exception as e:
+            logger.error(f"Erro ao definir chave Redis: {str(e)}")
+            self.connected = False
+            return False
+
+    async def get_key(self, key: str) -> Optional[str]:
+        """Obtém um valor armazenado"""
+        if not self.connected and not await self.connect():
             return None
 
-# Instância global para ser usada na aplicação
-redis_client = RedisClient()
+        try:
+            return await self._client.get(key)
+        except Exception as e:
+            logger.error(f"Erro ao obter chave Redis: {str(e)}")
+            self.connected = False
+            return None
 
-async def get_redis_client() -> redis.Redis:
-    # This dependency can be used in FastAPI endpoints
-    # It ensures the client is connected before use.
-    client = await redis_client.client
-    if not client:
-        raise Exception("Não foi possível conectar ao Redis. Verifique os logs e a configuração.")
-    return client
+    async def delete_key(self, key: str) -> bool:
+        """Remove uma chave"""
+        if not self.connected and not await self.connect():
+            return False
 
-# Funções para serem chamadas no startup e shutdown da aplicação FastAPI
-async def startup_redis_client():
-    await redis_client.connect()
-
-async def shutdown_redis_client():
-    await redis_client.disconnect()
+        try:
+            return await self._client.delete(key) > 0
+        except Exception as e:
+            logger.error(f"Erro ao deletar chave Redis: {str(e)}")
+            self.connected = False
+            return False
 
 
+# Instância singleton do serviço
+redis_service = RedisService()
+
+
+# Funções para injeção de dependência
+async def get_redis_publisher():
+    """Retorna instância para publicação de mensagens"""
+    if not redis_service.connected:
+        await redis_service.connect()
+    return redis_service
+
+
+async def get_redis_subscriber():
+    """Retorna instância para inscrição em canais"""
+    if not redis_service.connected:
+        await redis_service.connect()
+    return redis_service

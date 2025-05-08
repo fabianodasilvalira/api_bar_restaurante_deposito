@@ -1,78 +1,115 @@
-# app/api/v1/endpoints/auth.py
-from datetime import timedelta
-from typing import Any
+from datetime import datetime, timedelta
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app import crud, schemas # Ajuste os caminhos de importação conforme sua estrutura
-from app.api import deps # Ajuste os caminhos de importação
-from app.core import security
+from app import schemas
+from app.crud import usuario as crud_usuario
+from app.db.database import get_db
+from app.models import Usuario as DBUsuario
+from app.services.auth_service import AuthService
 from app.core.config import settings
-from app.db.models.usuario import Usuario as DBUsuario # Para evitar conflito com schema.Usuario
+from app.core.logging import logger
 
 router = APIRouter()
 
-@router.post("/login/access-token", response_model=schemas.Token)
-def login_access_token(
-    db: Session = Depends(deps.get_db),
-    form_data: OAuth2PasswordRequestForm = Depends()
+
+@router.post("/token", response_model=schemas.Token)
+async def login_for_access_token(
+        db: Session = Depends(get_db),
+        form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
     """
-    OAuth2 compatible token login, get an access token for future requests.
+    OAuth2 token login (email + password).
+    Returns access and refresh tokens.
     """
-    user = crud.usuario.authenticate(
-        db, email=form_data.username, password=form_data.password
-    )
-    if not user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email ou senha incorretos")
-    elif not crud.usuario.is_active(user):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuário inativo")
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    return {
-        "access_token": security.create_access_token(
-            user.email, expires_delta=access_token_expires # Usar email como subject do token
-        ),
-        "token_type": "bearer",
-    }
-
-@router.post("/login/test-token", response_model=schemas.Usuario)
-def test_token(current_user: DBUsuario = Depends(deps.get_current_user)) -> Any:
-    """
-    Test access token.
-    """
-    return current_user
-
-
-@router.post("/users/open", response_model=schemas.Usuario, status_code=status.HTTP_201_CREATED)
-def create_user_open(
-    *, 
-    db: Session = Depends(deps.get_db),
-    user_in: schemas.UsuarioCreate
-) -> Any:
-    """
-    Create new user without the need to be logged in.
-    (Use this for initial user creation or public registration if applicable)
-    """
-    user = crud.usuario.get_by_email(db, email=user_in.email)
-    if user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The user with this email already exists in the system.",
+    try:
+        # Usa o AuthService para autenticação
+        token = await AuthService().login_for_access_token(
+            db=db,
+            form_data=form_data
         )
-    # Por padrão, novos usuários criados por este endpoint não são superusuários
-    user_in.is_superuser = False 
-    user = crud.usuario.create(db, obj_in=user_in)
-    return user
+        logger.info(f"Login bem-sucedido para usuário: {form_data.username}")
+        return token
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro no login: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro interno ao processar login"
+        )
 
-@router.get("/users/me", response_model=schemas.Usuario)
-def read_user_me(
-    db: Session = Depends(deps.get_db),
-    current_user: DBUsuario = Depends(deps.get_current_active_user)
+
+@router.post("/refresh-token", response_model=schemas.Token)
+async def refresh_access_token(
+        db: Session = Depends(get_db),
+        refresh_token: str
 ) -> Any:
     """
-    Get current user.
+    Refresh an expired access token using a valid refresh token.
+    """
+    try:
+        token = await AuthService().refresh_access_token(
+            db=db,
+            refresh_token=refresh_token
+        )
+        return token
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao renovar token: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro interno ao renovar token"
+        )
+
+
+@router.get("/me", response_model=schemas.Usuario)
+async def read_user_me(
+        current_user: DBUsuario = Depends(AuthService.get_current_active_user)
+) -> Any:
+    """
+    Get current logged-in user data.
     """
     return current_user
 
+
+@router.post("/register", response_model=schemas.Usuario, status_code=status.HTTP_201_CREATED)
+async def register_new_user(
+        user_in: schemas.UsuarioCreate,
+        db: Session = Depends(get_db)
+) -> Any:
+    """
+    Register a new user (open endpoint).
+    By default, new users are not admins and are active.
+    """
+    try:
+        # Verifica se o email já existe
+        if crud_usuario.get_by_email(db, email=user_in.email):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email já registrado no sistema"
+            )
+
+        # Cria o usuário com cargo padrão 'garcom' se não especificado
+        if not user_in.cargo:
+            user_in.cargo = "garcom"
+
+        user_in.ativo = True  # Ativa por padrão
+        user_in.hashed_password = AuthService.get_password_hash(user_in.password)
+
+        db_user = crud_usuario.create(db, obj_in=user_in)
+        logger.info(f"Novo usuário registrado: {db_user.email}")
+        return db_user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro no registro de usuário: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro interno ao registrar usuário"
+        )
