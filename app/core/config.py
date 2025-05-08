@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", 6379))
     PROJECT_NAME: str = "API Restaurante/Bar"
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    SUPPORT_EMAIL: str = os.getenv("SUPPORT_EMAIL", "support@example.com")
 
     # CORS
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []

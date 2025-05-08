@@ -248,7 +248,24 @@ async def get_comanda_digital(
 
 
 async def _get_itens_comanda(db: Session, comanda_id: uuid.UUID) -> List[schemas.ItemComandaDigital]:
-    """Obtém itens da comanda formatados para visualização do cliente"""
-    # Implementação que busca e formata os itens dos pedidos da comanda
-    # Retorna lista de schemas.ItemComandaDigital
-    pass
+    """Obtém itens da comanda formatados para visualização do cliente.
+
+    Esta função deve:
+    1. Buscar todos os Pedidos associados à comanda_id.
+    2. Para cada Pedido, buscar seus respectivos ItensPedido.
+    3. Para cada ItemPedido, extrair as informações relevantes (nome do produto, quantidade, preço total do item, observações).
+       - Pode ser necessário buscar o nome do Produto a partir do id_produto no ItemPedido.
+    4. Formatar essas informações de acordo com o schema `schemas.ItemComandaDigital` (que precisa ser definido ou importado).
+       - O schema `schemas.ItemComandaDigital` deve conter campos como: nome_produto, quantidade, preco_total_item, observacoes_item.
+    5. Retornar uma lista desses objetos `schemas.ItemComandaDigital`.
+
+    Exemplo de estrutura para ItemComandaDigital (a ser definido em app/schemas/comanda.py ou similar):
+    class ItemComandaDigital(BaseModel):
+        nome_produto: str
+        quantidade: int
+        preco_total_item: Decimal
+        observacoes: Optional[str] = None
+    """
+    # TODO: Implementar a lógica de busca e formatação dos itens da comanda.
+    # Por enquanto, retorna uma lista vazia como placeholder.
+    return []

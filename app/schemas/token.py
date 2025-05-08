@@ -2,7 +2,7 @@
 from typing import Optional
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
 class Token(BaseModel):
@@ -11,10 +11,7 @@ class Token(BaseModel):
 
 
 class TokenPayload(BaseModel):
-    sub: Optional[uuid.UUID] = None # Alterado para UUID se o ID do usuário for UUID
-    # Se "sub" for o email, mantenha como Optional[str]
-    # Para este projeto, o "sub" no JWT será o email do usuário.
-    # sub: Optional[str] = None
+    sub: Optional[EmailStr] = None # Alterado para EmailStr para refletir o uso de email
 
 # Reconfirmando a necessidade de TokenData, pois TokenPayload parece mais adequado para o JWT.
 # Se TokenData for usado para validar o payload decodificado, ele deve corresponder ao que está no JWT.
