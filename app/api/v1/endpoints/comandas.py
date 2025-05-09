@@ -200,8 +200,8 @@ async def fechar_comanda(
 
 @router.get("/digital/{qr_code_hash}", response_model=schemas.ComandaDigital)
 async def get_comanda_digital(
-        qr_code_hash: str,
-        db: Session = Depends(get_db)
+    qr_code_hash: str,
+    db: Session = Depends(get_db)
 ) -> schemas.ComandaDigital:
     """
     Endpoint público para visualização da comanda via QR Code
@@ -227,6 +227,8 @@ async def get_comanda_digital(
         if valor_restante < 0:
             valor_restante = Decimal("0.00")
 
+        itens = await _get_itens_comanda(db, comanda)
+
         return schemas.ComandaDigital(
             id=comanda.id,
             mesa_numero=mesa.numero_identificador,
@@ -235,7 +237,10 @@ async def get_comanda_digital(
             valor_pago=comanda.valor_pago,
             valor_restante=valor_restante,
             data_abertura=comanda.data_criacao,
-        itens = await _get_itens_comanda(db, comanda)  # Alterado para passar o objeto comanda    except HTTPException:
+            itens=itens  # Adicione esse campo ao seu schema se ainda não estiver lá
+        )
+
+    except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Erro ao acessar comanda digital: {str(e)}")
@@ -243,7 +248,6 @@ async def get_comanda_digital(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro interno ao acessar comanda"
         )
-
 
 async def _get_itens_comanda(db: Session, db_comanda: DBComanda) -> List[
     schemas.ItemPedidoComandaDigital]:  # Assinatura alterada

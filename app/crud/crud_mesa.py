@@ -1,13 +1,13 @@
 # app/crud/crud_mesa.py
 import uuid
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional, Union, Dict, Any, Tuple
 import hashlib # Para gerar o qr_code_hash
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func # Para func.now()
 
 from app.db.models.mesa import Mesa, StatusMesa
-from app.schemas.mesa import MesaCreate, MesaUpdate
+from app.schemas.mesa import MesaCreateSchemas, MesaUpdateSchemas
 # from app.crud import crud_comanda # Será necessário para abrir comanda ao abrir mesa
 
 class CRUDMesa:
@@ -36,7 +36,7 @@ class CRUDMesa:
         data_to_hash = f"{str(mesa_id)}-{numero_identificador}-{str(timestamp)}"
         return hashlib.sha256(data_to_hash.encode()).hexdigest()[:16] # Pega os primeiros 16 chars do hash
 
-    def create(self, db: Session, *, obj_in: MesaCreate) -> Mesa:
+    def create(self, db: Session, *, obj_in: MesaCreateSchemas) -> Mesa:
         # Verificar se já existe mesa com o mesmo número identificador
         existing_mesa = self.get_by_numero_identificador(db, numero_identificador=obj_in.numero_identificador)
         if existing_mesa:
@@ -62,7 +62,7 @@ class CRUDMesa:
         return db_obj
 
     def update(
-        self, db: Session, *, db_obj: Mesa, obj_in: Union[MesaUpdate, Dict[str, Any]]
+        self, db: Session, *, db_obj: Mesa, obj_in: Union[MesaUpdateSchemas, Dict[str, Any]]
     ) -> Mesa:
         if isinstance(obj_in, dict):
             update_data = obj_in

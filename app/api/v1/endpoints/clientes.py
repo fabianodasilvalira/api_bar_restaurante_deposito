@@ -1,23 +1,23 @@
+from asyncio.log import logger
 from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import schemas
-from app.crud import cliente as crud_cliente
-from app.db.database import get_db
+from app.auth import AuthService
+from app.crud import crud_cliente as crud_cliente
+from app.database import get_db
 from app.models import Usuario as DBUsuario, Cliente as DBCliente
-from app.services.auth_service import AuthService
-from app.core.logging import logger
 
 router = APIRouter()
 
-@router.post("/", response_model=schemas.Cliente, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=schemas.ClienteSchemas, status_code=status.HTTP_201_CREATED)
 async def create_cliente(
-    cliente_in: schemas.ClienteCreate,
+    cliente_in: schemas.ClienteCreateSchemas,
     db: Session = Depends(get_db),
     current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.Cliente:
+) -> schemas.ClienteSchemas:
     """
     Cria um novo cliente.
     Requer autenticação.
@@ -43,14 +43,14 @@ async def create_cliente(
             detail="Erro interno ao criar cliente"
         )
 
-@router.get("/", response_model=List[schemas.Cliente])
+@router.get("/", response_model=List[schemas.ClienteSchemas])
 async def read_clientes(
     skip: int = 0,
     limit: int = 100,
     telefone: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> List[schemas.Cliente]:
+) -> List[schemas.ClienteSchemas]:
     """
     Lista clientes com paginação.
     Filtro opcional por telefone.
@@ -67,12 +67,12 @@ async def read_clientes(
             detail="Erro interno ao listar clientes"
         )
 
-@router.get("/{cliente_id}", response_model=schemas.Cliente)
+@router.get("/{cliente_id}", response_model=schemas.ClienteSchemas)
 async def read_cliente(
     cliente_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.Cliente:
+) -> schemas.ClienteSchemas:
     """
     Obtém um cliente específico pelo ID.
     """
@@ -84,13 +84,13 @@ async def read_cliente(
         )
     return cliente
 
-@router.put("/{cliente_id}", response_model=schemas.Cliente)
+@router.put("/{cliente_id}", response_model=schemas.ClienteSchemas)
 async def update_cliente(
     cliente_id: uuid.UUID,
-    cliente_in: schemas.ClienteUpdate,
+    cliente_in: schemas.ClienteUpdateSchemas,
     db: Session = Depends(get_db),
     current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.Cliente:
+) -> schemas.ClienteSchemas:
     """
     Atualiza os dados de um cliente.
     """

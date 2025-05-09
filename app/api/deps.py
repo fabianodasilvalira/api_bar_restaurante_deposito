@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.database import SessionLocal
 from app.db.models.usuario import Usuario # Ajuste o caminho se necessário
 from app.crud import crud_usuario # Ajuste o caminho se necessário
-from app.schemas.token import TokenData # Ajuste o caminho se necessário
+from app.schemas.token import TokenDataSchemas # Ajuste o caminho se necessário
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login/access-token"
@@ -36,7 +36,7 @@ def get_current_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Could not validate credentials (payload is None)",
             )
-        token_data = TokenData(**payload)
+        token_data = TokenDataSchemas(**payload)
     except (jwt.JWTError, ValidationError) as e:
         # Log a exceção e:
         # print(f"Token decoding/validation error: {e}")

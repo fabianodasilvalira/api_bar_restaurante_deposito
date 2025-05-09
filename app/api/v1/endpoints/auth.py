@@ -1,3 +1,4 @@
+from asyncio.log import logger
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
@@ -6,17 +7,16 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app import schemas
-from app.crud import usuario as crud_usuario
-from app.db.database import get_db
+from app.auth import AuthService
+from app.crud import crud_usuario as crud_usuario
+from app.database import get_db
 from app.models import Usuario as DBUsuario
-from app.services.auth_service import AuthService
 from app.core.config import settings
-from app.core.logging import logger
 
 router = APIRouter()
 
 
-@router.post("/token", response_model=schemas.Token)
+@router.post("/token", response_model=schemas.TokenSchemas)
 async def login_for_access_token(
         db: Session = Depends(get_db),
         form_data: OAuth2PasswordRequestForm = Depends()
@@ -43,10 +43,12 @@ async def login_for_access_token(
         )
 
 
-@router.post("/refresh-token", response_model=schemas.Token)
+from fastapi import Body
+
+@router.post("/refresh-token", response_model=schemas.TokenSchemas)
 async def refresh_access_token(
-        db: Session = Depends(get_db),
-        refresh_token: str
+        payload: schemas.TokenSchemas,
+        db: Session = Depends(get_db)
 ) -> Any:
     """
     Refresh an expired access token using a valid refresh token.
@@ -54,7 +56,7 @@ async def refresh_access_token(
     try:
         token = await AuthService().refresh_access_token(
             db=db,
-            refresh_token=refresh_token
+            refresh_token=payload.refresh_token
         )
         return token
     except HTTPException:
@@ -67,7 +69,7 @@ async def refresh_access_token(
         )
 
 
-@router.get("/me", response_model=schemas.Usuario)
+@router.get("/me", response_model=schemas.UsuarioSchemas)
 async def read_user_me(
         current_user: DBUsuario = Depends(AuthService.get_current_active_user)
 ) -> Any:
@@ -77,9 +79,9 @@ async def read_user_me(
     return current_user
 
 
-@router.post("/register", response_model=schemas.Usuario, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=schemas.UsuarioSchemas, status_code=status.HTTP_201_CREATED)
 async def register_new_user(
-        user_in: schemas.UsuarioCreate,
+        user_in: schemas.UsuarioCreateSchemas,
         db: Session = Depends(get_db)
 ) -> Any:
     """

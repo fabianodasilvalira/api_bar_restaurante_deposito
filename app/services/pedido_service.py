@@ -230,7 +230,7 @@ class PedidoService:
         return None
 
 
-class CRUDPedido(CRUDBase[Pedido, PedidoCreate, PedidoUpdate]):
+class CRUDPedidoService(CRUDBase[Pedido, PedidoCreate, PedidoUpdate]):
     """CRUD específico para Pedidos com operações adicionais"""
 
     def get_by_comanda(self, db: Session, comanda_id: uuid.UUID) -> List[Pedido]:

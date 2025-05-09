@@ -9,7 +9,7 @@ from pydantic import BaseModel
 # Este schema já foi definido na primeira entrega e no crud_fiado.py
 # Mantendo aqui para consistência da estrutura de pastas.
 
-class RelatorioFiadoItem(BaseModel):
+class RelatorioFiadoItemSchemas(BaseModel):
     id_cliente: uuid.UUID
     nome_cliente: Optional[str] = "Cliente não informado"
     valor_total_devido: Decimal
@@ -19,7 +19,7 @@ class RelatorioFiadoItem(BaseModel):
     class Config:
         from_attributes = True
 
-class RelatorioFiado(BaseModel):
+class RelatorioFiadoSchemas(BaseModel):
     periodo_inicio: date
     periodo_fim: date
     total_geral_devido: Decimal

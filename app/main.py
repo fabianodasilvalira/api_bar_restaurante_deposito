@@ -1,15 +1,16 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles  # Para servir arquivos estáticos se necessário
 
 from app.core.config import settings
 from app.api.v1.router import api_router_v1
-from app.db.session import engine  # Importamos a engine para criação de tabelas (opcional)
+from app.database import engine
 from app.db import base_class  # Import Base para criação de tabelas
-from app.core.logging import configure_logging  # Configuração de logging
 
-# Configura o logging assim que a aplicação inicia
-configure_logging()
+# Configuração básica de logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -42,7 +43,7 @@ if settings.ENVIRONMENT == "development":
     async def create_tables():
         async with engine.begin() as conn:
             await conn.run_sync(base_class.Base.metadata.create_all)
-        print("Tabelas criadas com sucesso (apenas em desenvolvimento)")
+        logger.info("Tabelas criadas com sucesso (apenas em desenvolvimento)")
 
 # Inclui rota para arquivos estáticos se necessário (ex: QR codes)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -67,3 +68,4 @@ async def health_check():
         "database": "connected" if settings.DATABASE_URL else "disconnected",
         "environment": settings.ENVIRONMENT
     }
+

@@ -1,7 +1,8 @@
+from asyncio.log import logger
+
 import redis.asyncio as redis
 from typing import Optional, AsyncIterator
 from app.core.config import settings
-from app.core.logging import logger
 
 
 class RedisService:

@@ -10,11 +10,11 @@ from app.api import deps  # Ajuste os caminhos de importação conforme sua estr
 router = APIRouter()
 
 
-@router.post("/", response_model=schemas.Produto, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=schemas.ProdutoSchemas, status_code=status.HTTP_201_CREATED)
 def create_produto(
         *,
         db: Session = Depends(deps.get_db),
-        produto_in: schemas.ProdutoCreate,
+        produto_in: schemas.ProdutoCreateSchemas,
         current_user: models.Usuario = Depends(deps.get_current_active_superuser)
         # Apenas superusuários podem criar produtos
 ) -> Any:
@@ -31,7 +31,7 @@ def create_produto(
     return produto
 
 
-@router.get("/", response_model=List[schemas.Produto])
+@router.get("/", response_model=List[schemas.ProdutoSchemas])
 def read_produtos(
         db: Session = Depends(deps.get_db),
         skip: int = 0,
@@ -48,7 +48,7 @@ def read_produtos(
     return produtos
 
 
-@router.get("/{produto_id}", response_model=schemas.Produto)
+@router.get("/{produto_id}", response_model=schemas.ProdutoSchemas)
 def read_produto_by_id(
         produto_id: uuid.UUID,
         db: Session = Depends(deps.get_db)
@@ -62,12 +62,12 @@ def read_produto_by_id(
     return produto
 
 
-@router.put("/{produto_id}", response_model=schemas.Produto)
+@router.put("/{produto_id}", response_model=schemas.ProdutoSchemas)
 def update_produto(
         *,
         db: Session = Depends(deps.get_db),
         produto_id: uuid.UUID,
-        produto_in: schemas.ProdutoUpdate,
+        produto_in: schemas.ProdutoUpdateSchemas,
         current_user: models.Usuario = Depends(deps.get_current_active_superuser)
         # Apenas superusuários podem atualizar produtos
 ) -> Any:
@@ -86,7 +86,7 @@ def update_produto(
     return produto
 
 
-@router.delete("/{produto_id}", response_model=schemas.Produto)
+@router.delete("/{produto_id}", response_model=schemas.ProdutoSchemas)
 def delete_produto(
         *,
         db: Session = Depends(deps.get_db),

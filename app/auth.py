@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from pydantic import EmailStr
 
 from . import schemas, models, crud
-from .config import settings
+from app.core.config import settings
 from .database import get_db
 
 # Security configurations
@@ -159,7 +159,7 @@ class AuthService:
     async def login_for_access_token(
             db: Session,
             form_data: OAuth2PasswordRequestForm
-    ) -> schemas.Token:
+    ) -> schemas.TokenSchemas:
         """Generate access and refresh tokens for valid credentials."""
         user = await AuthService.authenticate_user(
             db, form_data.username, form_data.password)
@@ -193,7 +193,7 @@ class AuthService:
     async def refresh_access_token(
             db: Session,
             refresh_token: str
-    ) -> schemas.Token:
+    ) -> schemas.TokenSchemas:
         """Generate a new access token from a refresh token."""
         try:
             payload = AuthService.decode_token(refresh_token)

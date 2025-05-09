@@ -1,21 +1,21 @@
-from .token import Token
-from .usuario import Usuario, UsuarioCreate, UsuarioUpdate, UsuarioInDB
-from .produto import Produto, ProdutoCreate, ProdutoUpdate
-from .cliente import Cliente, ClienteCreate, ClienteUpdate
-from .mesa import Mesa, MesaCreate, MesaUpdate
-from .comanda import Comanda, ComandaCreate, ComandaUpdate
-from .pedido import Pedido, PedidoCreate, PedidoUpdate
-from .pagamento import Pagamento, PagamentoCreate
-from .fiado import Fiado, FiadoCreate, FiadoUpdate
+from .token import TokenSchemas
+from .usuario import UsuarioSchemas, UsuarioCreateSchemas, UsuarioUpdateSchemas, UsuarioInDBSchemas
+from .produto import ProdutoSchemas, ProdutoCreateSchemas, ProdutoUpdateSchemas
+from .cliente import ClienteSchemas, ClienteCreateSchemas, ClienteUpdateSchemas
+from .mesa import MesaSchemas, MesaCreateSchemas, MesaUpdateSchemas,
+from .comanda import ComandaSchemas, ComandaCreateSchemas, ComandaUpdateSchemas
+from .pedido import PedidoSchemas, PedidoCreateSchemas, PedidoUpdateSchemas
+from .pagamento import PagamentoSchemas, PagamentoCreateSchemas
+from .fiado import FiadoSchemas, FiadoCreateSchemas, FiadoUpdateSchemas
 
 __all__ = [
-    "Token",
-    "Usuario", "UsuarioCreate", "UsuarioUpdate", "UsuarioInDB",
-    "Produto", "ProdutoCreate", "ProdutoUpdate",
-    "Cliente", "ClienteCreate", "ClienteUpdate",
-    "Mesa", "MesaCreate", "MesaUpdate",
-    "Comanda", "ComandaCreate", "ComandaUpdate",
-    "Pedido", "PedidoCreate", "PedidoUpdate",
-    "Pagamento", "PagamentoCreate",
-    "Fiado", "FiadoCreate", "FiadoUpdate"
+    "TokenSchemas",
+    "UsuarioSchemas", "UsuarioCreateSchemas", "UsuarioUpdateSchemas", "UsuarioInDBSchemas",
+    "ProdutoSchemas", "ProdutoCreateSchemas", "ProdutoUpdateSchemas",
+    "ClienteSchemas", "ClienteCreateSchemas", "ClienteUpdateSchemas",
+    "MesaSchemas", "MesaCreateSchemas", "MesaUpdateSchemas", "MesaDetailSchemas"
+    "ComandaSchemas", "ComandaCreateSchemas", "ComandaUpdateSchemas",
+    "PedidoSchemas", "PedidoCreateSchemas", "PedidoUpdateSchemas",
+    "PagamentoSchemas", "PagamentoCreateSchemas",
+    "FiadoSchemas", "FiadoCreateSchemas", "FiadoUpdateSchemas"
 ]

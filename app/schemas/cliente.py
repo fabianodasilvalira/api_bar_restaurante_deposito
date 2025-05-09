@@ -3,20 +3,20 @@ from typing import Optional
 import uuid
 from pydantic import BaseModel, EmailStr # EmailStr might not be needed for Cliente unless they have email
 
-class ClienteBase(BaseModel):
+class ClienteBaseSchemas(BaseModel):
     nome: Optional[str] = None
     telefone: Optional[str] = None
     observacoes: Optional[str] = None
 
-class ClienteCreate(ClienteBase):
+class ClienteCreateSchemas(ClienteBaseSchemas):
     # Telefone pode ser obrigatório na criação, dependendo dos requisitos
     # telefone: str
     pass
 
-class ClienteUpdate(ClienteBase):
+class ClienteUpdateSchemas(ClienteBaseSchemas):
     pass
 
-class ClienteInDBBase(ClienteBase):
+class ClienteInDBBaseSchemas(ClienteBaseSchemas):
     id: uuid.UUID
     # data_criacao: datetime # from Base model
     # data_atualizacao: Optional[datetime] = None # from Base model
@@ -24,6 +24,6 @@ class ClienteInDBBase(ClienteBase):
     class Config:
         from_attributes = True
 
-class Cliente(ClienteInDBBase):
+class ClienteSchemas(ClienteInDBBaseSchemas):
     pass
 

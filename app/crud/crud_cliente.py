@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.db.models.cliente import Cliente
-from app.schemas.cliente import ClienteCreate, ClienteUpdate
+from app.schemas.cliente import ClienteCreateSchemas, ClienteUpdateSchemas
 
 class CRUDCliente:
     def get(self, db: Session, id: uuid.UUID) -> Optional[Cliente]:
@@ -18,7 +18,7 @@ class CRUDCliente:
     ) -> List[Cliente]:
         return db.query(Cliente).order_by(Cliente.nome).offset(skip).limit(limit).all()
 
-    def create(self, db: Session, *, obj_in: ClienteCreate) -> Cliente:
+    def create(self, db: Session, *, obj_in: ClienteCreateSchemas) -> Cliente:
         db_obj = Cliente(
             nome=obj_in.nome,
             telefone=obj_in.telefone,
@@ -30,7 +30,7 @@ class CRUDCliente:
         return db_obj
 
     def update(
-        self, db: Session, *, db_obj: Cliente, obj_in: Union[ClienteUpdate, Dict[str, Any]]
+        self, db: Session, *, db_obj: Cliente, obj_in: Union[ClienteUpdateSchemas, Dict[str, Any]]
     ) -> Cliente:
         if isinstance(obj_in, dict):
             update_data = obj_in

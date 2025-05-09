@@ -5,24 +5,24 @@ from decimal import Decimal
 import uuid
 
 # --- Token Schemas ---
-class Token(BaseModel):
+class TokenSchemas(BaseModel):
     access_token: str
     token_type: str
 
-class TokenData(BaseModel):
+class TokenDataSchemas(BaseModel):
     email: Optional[str] = None
 
 # --- Usuario Schemas ---
-class UsuarioInternoBase(BaseModel):
+class UsuarioInternoBaseSchemas(BaseModel):
     email: EmailStr
     nome_completo: Optional[str] = None
     cargo: Optional[str] = None
     ativo: Optional[bool] = True
 
-class UsuarioInternoCreate(UsuarioInternoBase):
+class UsuarioInternoCreateSchemas(UsuarioInternoBaseSchemas):
     password: str
 
-class Usuario(UsuarioInternoBase):
+class UsuarioSchemas(UsuarioInternoBaseSchemas):
     id: uuid.UUID
     data_criacao: datetime
     data_atualizacao: Optional[datetime] = None
@@ -31,15 +31,15 @@ class Usuario(UsuarioInternoBase):
         from_attributes = True
 
 # --- Cliente Schemas ---
-class ClienteBase(BaseModel):
+class ClienteBaseSchemas(BaseModel):
     nome: Optional[str] = None
     telefone: Optional[str] = None
     observacoes: Optional[str] = None
 
-class ClienteCreate(ClienteBase):
+class ClienteCreateSchemas(ClienteBaseSchemas):
     pass
 
-class Cliente(ClienteBase):
+class ClienteSchemas(ClienteBaseSchemas):
     id: uuid.UUID
     data_criacao: datetime
     data_atualizacao: Optional[datetime] = None
@@ -48,17 +48,17 @@ class Cliente(ClienteBase):
         from_attributes = True
 
 # --- Produto Schemas ---
-class ProdutoBase(BaseModel):
+class ProdutoBaseSchemas(BaseModel):
     nome: str
     descricao: Optional[str] = None
     preco_unitario: Decimal
     categoria: Optional[str] = None
     disponivel: Optional[bool] = True
 
-class ProdutoCreate(ProdutoBase):
+class ProdutoCreateSchemas(ProdutoBaseSchemas):
     pass
 
-class Produto(ProdutoBase):
+class ProdutoSchemas(ProdutoBaseSchemas):
     id: uuid.UUID
     data_criacao: datetime
     data_atualizacao: Optional[datetime] = None
@@ -67,15 +67,15 @@ class Produto(ProdutoBase):
         from_attributes = True
 
 # --- ItemPedido Schemas ---
-class ItemPedidoBase(BaseModel):
+class ItemPedidoBaseSchemas(BaseModel):
     id_produto: uuid.UUID
     quantidade: int
     observacoes_item: Optional[str] = None
 
-class ItemPedidoCreate(ItemPedidoBase):
+class ItemPedidoCreateSchemas(ItemPedidoBaseSchemas):
     pass  # preco_unitario_momento e subtotal serão definidos no backend
 
-class ItemPedido(ItemPedidoBase):
+class ItemPedidoSchemas(ItemPedidoBaseSchemas):
     id: uuid.UUID
     preco_unitario_momento: Decimal
     subtotal: Decimal
@@ -85,14 +85,14 @@ class ItemPedido(ItemPedidoBase):
         from_attributes = True
 
 # --- Pedido Schemas ---
-class PedidoBase(BaseModel):
+class PedidoBaseSchemas(BaseModel):
     tipo: Optional[str] = "Interno"
     observacoes: Optional[str] = None
 
-class PedidoCreate(PedidoBase):
+class PedidoCreateSchemas(PedidoBaseSchemas):
     itens: List[ItemPedidoCreate]
 
-class Pedido(PedidoBase):
+class PedidoSchemas(PedidoBaseSchemas):
     id: uuid.UUID
     id_comanda: uuid.UUID
     status: str
@@ -106,15 +106,15 @@ class Pedido(PedidoBase):
         from_attributes = True
 
 # --- Pagamento Schemas ---
-class PagamentoBase(BaseModel):
+class PagamentoBaseSchemas(BaseModel):
     valor: Decimal
     metodo_pagamento: str  # Dinheiro, Cartão Crédito, Cartão Débito, Pix
     observacoes: Optional[str] = None
 
-class PagamentoCreate(PagamentoBase):
+class PagamentoCreateSchemas(PagamentoBaseSchemas):
     pass
 
-class Pagamento(PagamentoBase):
+class PagamentoSchemas(PagamentoBaseSchemas):
     id: uuid.UUID
     id_comanda: uuid.UUID
     data_pagamento: datetime
@@ -125,13 +125,13 @@ class Pagamento(PagamentoBase):
         from_attributes = True
 
 # --- Comanda Schemas ---
-class ComandaBase(BaseModel):
+class ComandaBaseSchemas(BaseModel):
     pass  # Campos preenchidos internamente
 
-class ComandaCreate(ComandaBase):
+class ComandaCreateSchemas(ComandaBaseSchemas):
     id_cliente_associado: Optional[uuid.UUID] = None
 
-class Comanda(ComandaBase):
+class ComandaSchemas(ComandaBaseSchemas):
     id: uuid.UUID
     id_mesa: uuid.UUID
     valor_total: Decimal
@@ -147,14 +147,14 @@ class Comanda(ComandaBase):
         from_attributes = True
 
 # --- Mesa Schemas ---
-class MesaBase(BaseModel):
+class MesaBaseSchemas(BaseModel):
     numero_identificador: str
     id_cliente_associado: Optional[uuid.UUID] = None
 
-class MesaCreate(MesaBase):
+class MesaCreateSchemas(MesaBaseSchemas):
     pass
 
-class Mesa(MesaBase):
+class MesaSchemas(MesaBaseSchemas):
     id: uuid.UUID
     qr_code_hash: Optional[str] = None
     status: str
@@ -171,16 +171,16 @@ class Mesa(MesaBase):
         from_attributes = True
 
 # --- Fiado Schemas ---
-class FiadoBase(BaseModel):
+class FiadoBaseSchemas(BaseModel):
     id_cliente: uuid.UUID
     valor_devido: Decimal
     data_vencimento: Optional[datetime] = None
     status: Optional[str] = "Pendente"
 
-class FiadoCreate(FiadoBase):
+class FiadoCreateSchemas(FiadoBaseSchemas):
     id_comanda_origem: uuid.UUID
 
-class Fiado(FiadoBase):
+class FiadoSchemas(FiadoBaseSchemas):
     id: uuid.UUID
     id_comanda_origem: uuid.UUID
     data_criacao: datetime
@@ -192,7 +192,7 @@ class Fiado(FiadoBase):
         from_attributes = True
 
 # --- Comanda Pública (via QR Code) ---
-class ComandaPublic(BaseModel):
+class ComandaPublicSchemas(BaseModel):
     id: uuid.UUID
     numero_mesa: str
     valor_total: Decimal
@@ -203,7 +203,7 @@ class ComandaPublic(BaseModel):
         from_attributes = True
 
 # --- Relatório Fiado Schemas ---
-class RelatorioFiadoItem(BaseModel):
+class RelatorioFiadoItemSchemas(BaseModel):
     id_cliente: uuid.UUID
     nome_cliente: Optional[str] = "Cliente não informado"
     valor_total_devido: Decimal
@@ -212,7 +212,7 @@ class RelatorioFiadoItem(BaseModel):
     class Config:
         from_attributes = True
 
-class RelatorioFiado(BaseModel):
+class RelatorioFiadoSchemas(BaseModel):
     periodo_inicio: date
     periodo_fim: date
     total_geral_devido: Decimal

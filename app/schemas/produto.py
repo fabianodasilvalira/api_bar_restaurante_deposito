@@ -4,22 +4,22 @@ import uuid
 from decimal import Decimal
 from pydantic import BaseModel
 
-class ProdutoBase(BaseModel):
+class ProdutoBaseSchemas(BaseModel):
     nome: str
     descricao: Optional[str] = None
     preco_unitario: Decimal
     categoria: Optional[str] = None
     disponivel: Optional[bool] = True
 
-class ProdutoCreate(ProdutoBase):
+class ProdutoCreateSchemas(ProdutoBaseSchemas):
     pass
 
-class ProdutoUpdate(ProdutoBase):
+class ProdutoUpdateSchemas(ProdutoBaseSchemas):
     nome: Optional[str] = None # All fields optional for update
     preco_unitario: Optional[Decimal] = None
     disponivel: Optional[bool] = None
 
-class ProdutoInDBBase(ProdutoBase):
+class ProdutoInDBBaseSchemas(ProdutoBaseSchemas):
     id: uuid.UUID
     # data_criacao: datetime # from Base model
     # data_atualizacao: Optional[datetime] = None # from Base model
@@ -27,6 +27,6 @@ class ProdutoInDBBase(ProdutoBase):
     class Config:
         from_attributes = True
 
-class Produto(ProdutoInDBBase):
+class ProdutoSchemas(ProdutoInDBBaseSchemas):
     pass
 

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_password_hash, verify_password
 from app.db.models.usuario import Usuario # Ajuste o caminho se necessário
-from app.schemas.usuario import UsuarioCreate, UsuarioUpdate # Ajuste o caminho se necessário
+from app.schemas.usuario import UsuarioCreateSchemas, UsuarioUpdateSchemas # Ajuste o caminho se necessário
 
 class CRUDUsuario:
     def get(self, db: Session, id: uuid.UUID) -> Optional[Usuario]:
@@ -20,7 +20,7 @@ class CRUDUsuario:
     ) -> List[Usuario]:
         return db.query(Usuario).offset(skip).limit(limit).all()
 
-    def create(self, db: Session, *, obj_in: UsuarioCreate) -> Usuario:
+    def create(self, db: Session, *, obj_in: UsuarioCreateSchemas) -> Usuario:
         db_obj = Usuario(
             email=obj_in.email,
             hashed_password=get_password_hash(obj_in.password),
@@ -35,7 +35,7 @@ class CRUDUsuario:
         return db_obj
 
     def update(
-        self, db: Session, *, db_obj: Usuario, obj_in: Union[UsuarioUpdate, Dict[str, Any]]
+        self, db: Session, *, db_obj: Usuario, obj_in: Union[UsuarioUpdateSchemas, Dict[str, Any]]
     ) -> Usuario:
         if isinstance(obj_in, dict):
             update_data = obj_in

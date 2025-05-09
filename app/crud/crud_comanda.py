@@ -8,7 +8,7 @@ from sqlalchemy import func, or_
 
 from app.db.models.comanda import Comanda, StatusComanda
 from app.db.models.mesa import Mesa, StatusMesa # Para atualizar status da mesa
-from app.schemas.comanda import ComandaCreate, ComandaUpdate
+from app.schemas.comanda import ComandaCreateSchemas, ComandaUpdateSchemas
 # from app.services.redis_service import redis_client # Para publicar eventos
 # import json
 
@@ -61,7 +61,7 @@ class CRUDComanda:
         # await redis_client.publish_message(f"mesa_{mesa_id}_comandas", json.dumps({"evento": "comanda_criada", "comanda_id": str(db_obj.id)}))
         return db_obj
 
-    def update(self, db: Session, *, db_obj: Comanda, obj_in: Union[ComandaUpdate, Dict[str, Any]]) -> Comanda:
+    def update(self, db: Session, *, db_obj: Comanda, obj_in: Union[ComandaUpdateSchemas, Dict[str, Any]]) -> Comanda:
         if isinstance(obj_in, dict):
             update_data = obj_in
         else:

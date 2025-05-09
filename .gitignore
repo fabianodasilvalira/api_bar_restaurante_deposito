@@ -1,68 +1,49 @@
-# Byte-compiled / optimized / DLL files
+# Ambiente virtual
+venv/
+.env/
+.env.*
+
+# Arquivos de cache do Python
 __pycache__/
 *.py[cod]
-*$py.class
+*.pyo
+*.pyd
+*.pyc
 
-# Virtual environment
-venv/
-env/
-.venv/
-ENV/
-env.bak/
-venv.bak/
+# Arquivos de log
+*.log
 
-# Distribution / packaging
-*.egg
-*.egg-info/
-dist/
+# Diretórios de build
 build/
-.eggs/
-pip-wheel-metadata/
+dist/
+*.egg-info/
 
 # PyInstaller
-*.manifest
 *.spec
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# VSCode
+.vscode/
 
-# Unit test / coverage reports
+# PyCharm
+.idea/
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+
+# Banco de dados local (se usar SQLite)
+*.sqlite3
+
+# Arquivos de teste
+.coverage
 htmlcov/
 .tox/
 .nox/
-.coverage
-coverage.xml
-*.cover
-.cache
 .pytest_cache/
-nosetests.xml
-test-results.xml
 
-# PyCharm & VSCode settings
-.idea/
-.vscode/
-*.code-workspace
+# Arquivos de configuração local
+*.local
+*.bak
 
-# Environments
-.env
-.env.*
-!.env.example
-
-# Docker
-*.log
-Dockerfile.*
-docker-compose*.yml
-__docker_cache__/
-
-# MyPy, Pylint, etc.
-.mypy_cache/
-.dmypy.json
-.pyre/
-.pytype/
-.pylint.d/
-
-# Jupyter Notebooks
-.ipynb_checkpoints
-
-# Local dev script
+# Uvicorn logs (caso você redirecione logs)
+uvicorn*.log

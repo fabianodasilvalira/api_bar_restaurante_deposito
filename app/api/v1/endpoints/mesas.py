@@ -1,4 +1,6 @@
 import uuid
+from asyncio.log import logger
+
 import qrcode
 import io
 from typing import List, Optional
@@ -7,24 +9,23 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
 from app import schemas
-from app.crud import mesa as crud_mesa, comanda as crud_comanda
-from app.db.database import get_db
-from app.models import Usuario as DBUsuario, Mesa as DBMesa, StatusMesa
-from app.services.auth_service import AuthService
+from app.auth import AuthService
+from app.crud import crud_mesa as crud_mesa, crud_comanda as crud_comanda
+from app.database import get_db
+from app.db.models.mesa import StatusMesa
+from app.models import Usuario as DBUsuario, Mesa as DBMesa
 from app.services.redis_service import RedisService
-from app.services.mesa_service import MesaService
-from app.core.logging import logger
 from app.core.config import settings
 
 router = APIRouter()
 
 
-@router.post("/", response_model=schemas.Mesa, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=schemas.MesaSchemas, status_code=status.HTTP_201_CREATED)
 async def create_mesa(
-        mesa_in: schemas.MesaCreate,
+        mesa_in: schemas.MesaCreateSchemas,
         db: Session = Depends(get_db),
         current_user: DBUsuario = Depends(AuthService.get_current_active_admin)
-) -> schemas.Mesa:
+) -> schemas.MesaSchemas:
     """
     Cria uma nova mesa (apenas administradores).
     Gera automaticamente um QR Code único.
@@ -54,14 +55,14 @@ async def create_mesa(
         )
 
 
-@router.get("/", response_model=List[schemas.Mesa])
+@router.get("/", response_model=List[schemas.MesaSchemas])
 async def list_mesas(
         skip: int = 0,
         limit: int = 100,
         status: Optional[StatusMesa] = None,
         db: Session = Depends(get_db),
         current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> List[schemas.Mesa]:
+) -> List[schemas.MesaSchemas]:
     """
     Lista todas as mesas com filtro opcional por status.
     """
@@ -75,12 +76,12 @@ async def list_mesas(
         )
 
 
-@router.get("/{mesa_id}", response_model=schemas.MesaDetail)
+@router.get("/{mesa_id}", response_model=schemas.MesaDetailSchemas)
 async def get_mesa(
         mesa_id: uuid.UUID,
         db: Session = Depends(get_db),
         current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.MesaDetail:
+) -> schemas.MesaDetailSchemas:
     """
     Obtém detalhes de uma mesa específica, incluindo:
     - Informações da mesa
@@ -116,13 +117,13 @@ async def get_mesa(
         )
 
 
-@router.put("/{mesa_id}", response_model=schemas.Mesa)
+@router.put("/{mesa_id}", response_model=schemas.MesaSchemas)
 async def update_mesa(
         mesa_id: uuid.UUID,
-        mesa_in: schemas.MesaUpdate,
+        mesa_in: schemas.MesaUpdateSchemas,
         db: Session = Depends(get_db),
         current_user: DBUsuario = Depends(AuthService.get_current_active_admin)
-) -> schemas.Mesa:
+) -> schemas.MesaSchemas:
     """
     Atualiza informações de uma mesa (apenas administradores).
     """
@@ -185,13 +186,13 @@ async def delete_mesa(
         )
 
 
-@router.post("/{mesa_id}/abrir", response_model=schemas.MesaDetail)
+@router.post("/{mesa_id}/abrir", response_model=schemas.MesaDetailSchemas)
 async def abrir_mesa(
         mesa_id: uuid.UUID,
         cliente_id: Optional[uuid.UUID] = None,
         db: Session = Depends(get_db),
         current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.MesaDetail:
+) -> schemas.MesaDetailSchemas:
     """
     Abre uma mesa, mudando seu status para OCUPADA e criando uma nova comanda.
     """
@@ -232,12 +233,12 @@ async def abrir_mesa(
         )
 
 
-@router.post("/{mesa_id}/fechar", response_model=schemas.Mesa)
+@router.post("/{mesa_id}/fechar", response_model=schemas.MesaSchemas)
 async def fechar_mesa(
         mesa_id: uuid.UUID,
         db: Session = Depends(get_db),
         current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.Mesa:
+) -> schemas.MesaSchemas:
     """
     Fecha uma mesa, mudando seu status para LIVRE.
     Verifica se a comanda associada está paga antes de fechar.
@@ -310,11 +311,11 @@ async def get_qrcode(
         )
 
 
-@router.get("/qrcode/{qr_code_hash}", response_model=schemas.Mesa)
+@router.get("/qrcode/{qr_code_hash}", response_model=schemas.MesaSchemas)
 async def get_mesa_by_qrcode(
         qr_code_hash: str,
         db: Session = Depends(get_db)
-) -> schemas.Mesa:
+) -> schemas.MesaSchemas:
     """
     Obtém os dados da mesa associada a um QR Code.
     Usado pelo frontend para validar QR Codes.
