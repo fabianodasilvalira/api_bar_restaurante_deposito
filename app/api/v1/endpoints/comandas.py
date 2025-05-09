@@ -1,4 +1,5 @@
 import uuid
+from asyncio.log import logger
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
@@ -7,13 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import schemas
-from app.crud import comanda as crud_comanda, mesa as crud_mesa
-from app.db.database import get_db
-from app.models import Usuario as DBUsuario, Comanda as DBComanda, StatusComanda
-from app.services.auth_service import AuthService
+from app.auth import AuthService
+from app.crud import crud_comanda as crud_comanda, crud_mesa as crud_mesa
+from app.database import get_db
+from app.db.models.comanda import StatusComanda
+from app.models import Usuario as DBUsuario, Comanda as DBComanda
 from app.services.pedido_service import PedidoService
 from app.services.redis_service import RedisService
-from app.core.logging import logger
 
 router = APIRouter()
 
@@ -234,10 +235,7 @@ async def get_comanda_digital(
             valor_pago=comanda.valor_pago,
             valor_restante=valor_restante,
             data_abertura=comanda.data_criacao,
-            itens=await _get_itens_comanda(db, comanda.id)
-        )
-
-    except HTTPException:
+        itens = await _get_itens_comanda(db, comanda)  # Alterado para passar o objeto comanda    except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Erro ao acessar comanda digital: {str(e)}")
@@ -247,25 +245,48 @@ async def get_comanda_digital(
         )
 
 
-async def _get_itens_comanda(db: Session, comanda_id: uuid.UUID) -> List[schemas.ItemComandaDigital]:
-    """Obtém itens da comanda formatados para visualização do cliente.
+async def _get_itens_comanda(db: Session, db_comanda: DBComanda) -> List[
+    schemas.ItemPedidoComandaDigital]:  # Assinatura alterada
+    """Obtém itens da comanda formatados para visualização do cliente."""
+    itens_formatados = []
 
-    Esta função deve:
-    1. Buscar todos os Pedidos associados à comanda_id.
-    2. Para cada Pedido, buscar seus respectivos ItensPedido.
-    3. Para cada ItemPedido, extrair as informações relevantes (nome do produto, quantidade, preço total do item, observações).
-       - Pode ser necessário buscar o nome do Produto a partir do id_produto no ItemPedido.
-    4. Formatar essas informações de acordo com o schema `schemas.ItemComandaDigital` (que precisa ser definido ou importado).
-       - O schema `schemas.ItemComandaDigital` deve conter campos como: nome_produto, quantidade, preco_total_item, observacoes_item.
-    5. Retornar uma lista desses objetos `schemas.ItemComandaDigital`.
+    # Verifica se a comanda e seus itens existem para evitar erros
+    if not db_comanda or not hasattr(db_comanda, 'itens_pedido') or not db_comanda.itens_pedido:
+        logger.info(
+            f"Comanda {db_comanda.id if db_comanda and hasattr(db_comanda, 'id') else 'desconhecida'} não possui itens ou itens não carregados.")
+        return itens_formatados
 
-    Exemplo de estrutura para ItemComandaDigital (a ser definido em app/schemas/comanda.py ou similar):
-    class ItemComandaDigital(BaseModel):
-        nome_produto: str
-        quantidade: int
-        preco_total_item: Decimal
-        observacoes: Optional[str] = None
-    """
-    # TODO: Implementar a lógica de busca e formatação dos itens da comanda.
-    # Por enquanto, retorna uma lista vazia como placeholder.
-    return []
+    for item_pedido in db_comanda.itens_pedido:
+        nome_produto_str = "Produto não informado"
+        # Verifica se o relacionamento 'produto' e o atributo 'nome' existem
+        if hasattr(item_pedido, 'produto') and item_pedido.produto and hasattr(item_pedido.produto, 'nome'):
+            nome_produto_str = item_pedido.produto.nome
+        else:
+            logger.warning(
+                f"Item de pedido {item_pedido.id if hasattr(item_pedido, 'id') else 'desconhecido'} sem produto associado ou nome do produto na comanda {db_comanda.id if db_comanda and hasattr(db_comanda, 'id') else 'desconhecida'}.")
+
+        status_str = "Status Indefinido"
+        # Verifica se o atributo 'status_item_pedido' e 'value' existem
+        if hasattr(item_pedido, 'status_item_pedido') and item_pedido.status_item_pedido and hasattr(
+                item_pedido.status_item_pedido, 'value'):
+            status_str = item_pedido.status_item_pedido.value
+        else:
+            logger.warning(
+                f"Item de pedido {item_pedido.id if hasattr(item_pedido, 'id') else 'desconhecido'} sem status ou valor de status na comanda {db_comanda.id if db_comanda and hasattr(db_comanda, 'id') else 'desconhecida'}.")
+
+        # Garante que os atributos básicos do item_pedido existem
+        quantidade = item_pedido.quantidade if hasattr(item_pedido, 'quantidade') else 0
+        preco_total_item = item_pedido.preco_total_item if hasattr(item_pedido, 'preco_total_item') else Decimal("0.0")
+        observacoes = item_pedido.observacoes_item if hasattr(item_pedido, 'observacoes_item') else None
+
+        itens_formatados.append(
+            schemas.ItemPedidoComandaDigital(
+                nome_produto=nome_produto_str,
+                quantidade=quantidade,
+                preco_total_item=preco_total_item,
+                status_item_pedido=status_str,
+                observacoes=observacoes
+            )
+        )
+
+    return itens_formatados

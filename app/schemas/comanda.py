@@ -62,3 +62,17 @@ class ComandaDigital(BaseModel):
     class Config:
         from_attributes = True
 
+
+
+
+# Schema para itens da comanda digital (visualização do cliente)
+class ItemPedidoComandaDigital(BaseModel):
+    nome_produto: str
+    quantidade: int
+    preco_total_item: Decimal
+    status_item_pedido: Optional[str] = None # Ex: "Preparando", "Pronto", "Entregue"
+    observacoes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
