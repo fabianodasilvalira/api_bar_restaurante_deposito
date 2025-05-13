@@ -7,16 +7,17 @@ from sqlalchemy.orm import Session
 
 from app import crud, schemas, models # Ajuste os caminhos de importação
 from app.api import deps # Ajuste os caminhos de importação
-from app.schemas.relatorio import RelatorioFiado
+from app.models.usuario import Usuario
+from app.schemas.relatorio_schemas import RelatorioFiadoSchemas
 
 router = APIRouter()
 
-@router.get("/fiado", response_model=RelatorioFiado)
+@router.get("/fiado", response_model=RelatorioFiadoSchemas)
 def get_relatorio_fiado_endpoint(
     data_inicio: date, # Query parameter
     data_fim: date,    # Query parameter
     db: Session = Depends(deps.get_db),
-    current_user: models.Usuario = Depends(deps.get_current_active_superuser) # Apenas superusuários podem ver relatórios
+    current_user: Usuario = Depends(deps.get_current_active_superuser) # Apenas superusuários podem ver relatórios
 ) -> Any:
     """
     Gera um relatório de fiados pendentes e parcialmente pagos.

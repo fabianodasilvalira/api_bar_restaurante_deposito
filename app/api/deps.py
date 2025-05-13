@@ -9,18 +9,18 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.config import settings
-from app.database import SessionLocal
-from app.db.models.usuario import Usuario # Ajuste o caminho se necessário
-from app.crud import crud_usuario # Ajuste o caminho se necessário
-from app.schemas.token import TokenDataSchemas # Ajuste o caminho se necessário
+from app.database import AsyncSessionLocal  # se realmente precisar da factory
+from app.models.usuario import Usuario # Corrected: Models are in app.models.py
+from app.crud import crud_usuario # This should point to the instance in crud_usuario.py
+from app.schemas.token_schemas import TokenData # Corrected: Import TokenData from token_schemas.py
 
 reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/auth/login/access-token"
+    tokenUrl=f"{settings.API_V1_STR}/auth/token" # Corrected tokenUrl to match auth endpoint
 )
 
 def get_db() -> Generator:
     try:
-        db = SessionLocal()
+        db = AsyncSessionLocal()
         yield db
     finally:
         db.close()
@@ -36,22 +36,26 @@ def get_current_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Could not validate credentials (payload is None)",
             )
-        token_data = TokenDataSchemas(**payload)
+        # Ensure that the payload keys match what TokenData expects (e.g., 'email' or 'sub')
+        # The TokenData schema expects 'email'. The token is created with 'sub'.
+        # Let's assume 'sub' in payload is the email for TokenData.
+        email_from_payload = payload.get("sub")
+        if email_from_payload is None:
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Could not validate credentials (sub is None in token)",
+            )
+        token_data = TokenData(email=email_from_payload)
+
     except (jwt.JWTError, ValidationError) as e:
-        # Log a exceção e:
-        # print(f"Token decoding/validation error: {e}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials (JWTError or ValidationError)",
         )
     
-    if token_data.sub is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Could not validate credentials (sub is None)",
-        )
-
-    user = crud_usuario.usuario.get_by_email(db, email=token_data.sub)
+    # token_data.sub was used before, but TokenData has 'email'. 
+    # Assuming token_data.email is the correct field after instantiation.
+    user = crud_usuario.get_by_email(db, email=token_data.email) 
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
@@ -59,16 +63,16 @@ def get_current_user(
 def get_current_active_user(
     current_user: Usuario = Depends(get_current_user)
 ) -> Usuario:
-    if not crud_usuario.usuario.is_active(current_user):
+    if not crud_usuario.is_active(current_user): # crud_usuario is an instance of CRUDUsuario
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
     return current_user
 
 def get_current_active_superuser(
     current_user: Usuario = Depends(get_current_active_user)
 ) -> Usuario:
-    if not crud_usuario.usuario.is_superuser(current_user):
+    if not crud_usuario.is_superuser(current_user): # crud_usuario is an instance of CRUDUsuario
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="The user doesn\'t have enough privileges"
+            status_code=status.HTTP_403_FORBIDDEN, detail="The user doesn\"t have enough privileges"
         )
     return current_user
 

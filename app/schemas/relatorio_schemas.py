@@ -23,9 +23,8 @@ class RelatorioFiadoSchemas(BaseModel):
     periodo_inicio: date
     periodo_fim: date
     total_geral_devido: Decimal
-    total_fiados_registrados_periodo: int # Número de transações de fiado em aberto no período
-    detalhes_por_cliente: List[RelatorioFiadoItem]
+    total_fiados_registrados_periodo: int  # Número de transações de fiado em aberto no período
+    detalhes_por_cliente: List[RelatorioFiadoItemSchemas]  # Corrigido o nome para RelatorioFiadoItemSchemas
 
     class Config:
         from_attributes = True
-

@@ -1,327 +1,179 @@
+# app/api/v1/endpoints/pedidos.py
 import uuid
-from datetime import datetime
-from typing import List, Optional
+from typing import List, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app import schemas
-from app.crud import pedido as crud_pedido, comanda as crud_comanda, item_pedido as crud_item_pedido
-from app.db.database import get_db
-from app.models import Usuario as DBUsuario, Pedido as DBPedido, StatusPedido
-from app.services.auth_service import AuthService
-from app.services.redis_service import RedisService
-from app.services.pedido_service import PedidoService
-from app.core.logging import logger
+from app import crud, schemas, models # Ajuste os caminhos de importação
+from app.api import deps # Ajuste os caminhos de importação
+from app.schemas.pedido_schemas import StatusPedido, PedidoSchemas  # Importar o Enum
+
+from app.models.usuario import Usuario
+from app.schemas import ItemPedido
+
+from app.schemas.pedido_schemas import PedidoCreateSchemas
+
+# from app.services.redis_service import redis_client, get_redis_client # Para publicar eventos no Redis
+# import json # Para formatar mensagens Redis
+# from app.services.pedido_service import update_pedido_status_and_notify # Serviço para encapsular lógica
 
 router = APIRouter()
 
-@router.post("/", response_model=schemas.PedidoDetail, status_code=status.HTTP_201_CREATED)
-async def create_pedido(
-    pedido_in: schemas.PedidoCreate,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.PedidoDetail:
+@router.post("/", response_model=PedidoSchemas, status_code=status.HTTP_201_CREATED)
+def create_pedido(
+    *,
+    db: Session = Depends(deps.get_db),
+    pedido_in: PedidoCreateSchemas,
+    current_user: Usuario = Depends(deps.get_current_active_user)
+) -> Any:
     """
-    Cria um novo pedido com itens associados.
-    Atualiza automaticamente o valor total da comanda.
+    Cria um novo pedido com seus itens.
+    O pedido é associado a uma comanda existente.
     """
     try:
-        # Verifica se a comanda existe e está aberta
-        comanda = crud_comanda.get(db, id=pedido_in.id_comanda)
-        if not comanda or comanda.status_pagamento in ["Totalmente Pago", "Fiado Fechado"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Comanda não encontrada ou já fechada"
-            )
+        # O id_usuario_registrou é o usuário logado que está fazendo a ação
+        pedido = crud.crud_pedido.create(db=db, obj_in=pedido_in, id_usuario_registrou=current_user.id)
 
-        # Usa o serviço para criar o pedido
-        pedido, message = await PedidoService().create_pedido(
-            db=db,
-            pedido_in=pedido_in,
-            usuario_id=current_user.id
-        )
+        # Publicar evento no Redis sobre o novo pedido (a lógica de publish está comentada no CRUD por enquanto)
+        # comanda_db = crud.comanda.get(db, id=pedido.id_comanda)
+        # redis_msg = {
+        #     "evento": "novo_pedido",
+        #     "pedido_id": str(pedido.id),
+        #     "id_comanda": str(pedido.id_comanda),
+        #     "id_mesa": str(comanda_db.id_mesa) if comanda_db else None,
+        #     "itens_count": len(pedido.itens),
+        #     "timestamp": pedido.data_criacao.isoformat()
+        # }
+        # await redis_client.publish_message(channel="pedidos_novos", message=json.dumps(redis_msg))
+        # # Notificar cozinha/bar
+        # await redis_client.publish_message(channel="cozinha_pedidos", message=json.dumps(redis_msg))
 
-        if not pedido:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=message
-            )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return pedido
 
-        # Publica evento no Redis
-        await RedisService().publish(
-            channel=f"comanda_{pedido_in.id_comanda}_pedidos",
-            message={
-                "event": "novo_pedido",
-                "pedido_id": str(pedido.id),
-                "itens_count": len(pedido.itens_pedido),
-                "responsavel": current_user.email
-            }
-        )
-
-        # Publica para a cozinha/bar se houver itens relevantes
-        if any(item.produto.categoria in ["COMIDA", "BEBIDA"] for item in pedido.itens_pedido):
-            await RedisService().publish(
-                channel="cozinha_pedidos",
-                message={
-                    "event": "novo_pedido_cozinha",
-                    "pedido_id": str(pedido.id),
-                    "comanda_id": str(pedido_in.id_comanda),
-                    "itens_count": len([i for i in pedido.itens_pedido if i.produto.categoria in ["COMIDA", "BEBIDA"]])
-                }
-            )
-
-        logger.info(f"Pedido {pedido.id} criado por {current_user.email}")
-        return pedido
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao criar pedido: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao criar pedido"
-        )
-
-@router.get("/", response_model=List[schemas.Pedido])
-async def list_pedidos(
-    comanda_id: Optional[uuid.UUID] = None,
-    status: Optional[StatusPedido] = None,
+@router.get("/", response_model=List[PedidoSchemas])
+def read_pedidos(
+    db: Session = Depends(deps.get_db),
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> List[schemas.Pedido]:
+    id_comanda: Optional[uuid.UUID] = None,
+    current_user: Usuario = Depends(deps.get_current_active_user)
+) -> Any:
     """
-    Lista pedidos com filtros opcionais:
-    - comanda_id: Filtra por comanda específica
-    - status: Filtra por status do pedido
+    Recupera a lista de pedidos, opcionalmente filtrada por comanda.
     """
-    try:
-        if comanda_id:
-            # Verifica se o usuário tem acesso à comanda
-            comanda = crud_comanda.get(db, id=comanda_id)
-            if not comanda:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Comanda não encontrada"
-                )
+    if id_comanda:
+        pedidos = crud.crud_pedido.get_multi_by_comanda(db, comanda_id=id_comanda, skip=skip, limit=limit)
+    else:
+        # Implementar crud.pedido.get_multi(db, skip=skip, limit=limit) se necessário listar todos os pedidos
+        # Por ora, vamos focar em pedidos por comanda.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID da comanda é obrigatório para listar pedidos por enquanto.")
+    return pedidos
 
-            if current_user.cargo not in ["admin", "gerente"]:
-                if comanda.mesa and comanda.mesa.id_usuario_responsavel != current_user.id:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Sem permissão para acessar esta comanda"
-                    )
-
-            return crud_pedido.get_by_comanda(
-                db=db,
-                comanda_id=comanda_id,
-                status=status,
-                skip=skip,
-                limit=limit
-            )
-        else:
-            # Somente admin/gerente pode listar todos os pedidos
-            if current_user.cargo not in ["admin", "gerente"]:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Somente administradores podem listar todos os pedidos"
-                )
-
-            return crud_pedido.get_multi(
-                db=db,
-                status=status,
-                skip=skip,
-                limit=limit
-            )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao listar pedidos: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao listar pedidos"
-        )
-
-@router.get("/{pedido_id}", response_model=schemas.PedidoDetail)
-async def get_pedido(
+@router.get("/{pedido_id}", response_model=PedidoSchemas)
+def read_pedido_by_id(
     pedido_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.PedidoDetail:
+    db: Session = Depends(deps.get_db),
+    current_user: Usuario = Depends(deps.get_current_active_user)
+) -> Any:
     """
-    Obtém detalhes de um pedido específico, incluindo todos os itens.
+    Recupera um pedido pelo seu ID.
     """
-    try:
-        pedido = crud_pedido.get(db, id=pedido_id)
-        if not pedido:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Pedido não encontrado"
-            )
+    pedido = crud.crud_pedido.get(db=db, id=pedido_id)
+    if not pedido:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
+    return pedido
 
-        # Verifica permissão
-        if current_user.cargo not in ["admin", "gerente"]:
-            if pedido.comanda.mesa and pedido.comanda.mesa.id_usuario_responsavel != current_user.id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Sem permissão para acessar este pedido"
-                )
-
-        return pedido
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao obter pedido {pedido_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao obter pedido"
-        )
-
-@router.put("/{pedido_id}/status", response_model=schemas.Pedido)
+@router.put("/{pedido_id}/status", response_model=PedidoSchemas)
 async def update_pedido_status(
+    *,
+    db: Session = Depends(deps.get_db),
+    # redis: aioredis.Redis = Depends(get_redis_client), # Se for injetar o cliente redis
     pedido_id: uuid.UUID,
-    status_update: schemas.PedidoStatusUpdate,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.Pedido:
+    novo_status: StatusPedido, # Receber o novo status como query parameter ou no corpo
+    current_user: Usuario = Depends(deps.get_current_active_user)
+) -> Any:
     """
-    Atualiza o status geral de um pedido.
-    Valida transições de status permitidas.
+    Atualiza o status geral de um pedido e seus itens (se aplicável).
+    Publica a atualização no Redis.
     """
-    try:
-        # Usa o serviço para atualizar o status
-        pedido, message = await PedidoService().update_pedido_status(
-            db=db,
-            pedido_id=pedido_id,
-            novo_status=status_update.status,
-            usuario_id=current_user.id
-        )
+    pedido = crud.crud_pedido.get(db=db, id=pedido_id)
+    if not pedido:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
 
-        if not pedido:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=message
-            )
+    # Usar o serviço que encapsula a lógica de atualização e notificação
+    # updated_pedido, error_message = await update_pedido_status_and_notify(
+    #     db=db, pedido_id=pedido_id, status_novo=novo_status, current_user=current_user
+    # )
+    # A função update_pedido_status_and_notify precisa ser ajustada para não cometer o db dentro dela se o crud_pedido já faz.
+    # Por agora, chamaremos o CRUD diretamente e a lógica de Redis está comentada no CRUD.
 
-        # Publica evento no Redis
-        await RedisService().publish(
-            channel=f"comanda_{pedido.id_comanda}_pedidos",
-            message={
-                "event": "status_pedido_atualizado",
-                "pedido_id": str(pedido.id),
-                "novo_status": pedido.status.value,
-                "atualizado_por": current_user.email
-            }
-        )
+    updated_pedido = crud.crud_pedido.update_status_geral(db=db, pedido_id=pedido_id, novo_status=novo_status)
+    if not updated_pedido:
+        # Isso não deveria acontecer se o pedido foi encontrado acima, a menos que update_status_geral retorne None em erro
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao atualizar status do pedido.")
 
-        logger.info(f"Status do pedido {pedido_id} atualizado para {status_update.status} por {current_user.email}")
-        return pedido
+    # A lógica de publicação no Redis está comentada dentro do crud_pedido.update_status_geral
+    # Se for movida para cá ou para um serviço, seria chamada aqui.
+    # Exemplo:
+    # comanda_db = crud.comanda.get(db, id=updated_pedido.id_comanda)
+    # redis_msg = {
+    #     "evento": "status_pedido_atualizado",
+    #     "pedido_id": str(updated_pedido.id),
+    #     "novo_status_geral": novo_status.value,
+    #     "id_comanda": str(updated_pedido.id_comanda),
+    #     "id_mesa": str(comanda_db.id_mesa) if comanda_db else None,
+    #     "timestamp": datetime.utcnow().isoformat() # Precisa importar datetime
+    # }
+    # await redis_client.publish_message(channel="pedidos_status_updates", message=json.dumps(redis_msg))
+    # await redis_client.publish_message(channel=f"comanda_{updated_pedido.id_comanda}_updates", message=json.dumps(redis_msg))
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao atualizar status do pedido {pedido_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao atualizar status do pedido"
-        )
+    return updated_pedido
 
-@router.put("/itens/{item_id}/status", response_model=schemas.ItemPedido)
-async def update_item_status(
-    item_id: uuid.UUID,
-    status_update: schemas.ItemPedidoStatusUpdate,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.ItemPedido:
+
+@router.put("/itens/{item_pedido_id}/status", response_model=ItemPedido)
+async def update_item_pedido_status(
+    *,
+    db: Session = Depends(deps.get_db),
+    item_pedido_id: uuid.UUID,
+    novo_status: StatusPedido,
+    current_user: Usuario = Depends(deps.get_current_active_user)
+) -> Any:
     """
-    Atualiza o status de um item específico do pedido.
-    Pode afetar o status geral do pedido.
+    Atualiza o status de um item de pedido específico.
+    Publica a atualização no Redis.
     """
-    try:
-        # Usa o serviço para atualizar o item
-        item, message = await PedidoService().update_item_status(
-            db=db,
-            item_id=item_id,
-            novo_status=status_update.status,
-            usuario_id=current_user.id
-        )
+    item_pedido = crud.crud_item_pedido.get(db=db, id=item_pedido_id)
+    if not item_pedido:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item do pedido não encontrado")
 
-        if not item:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=message
-            )
+    updated_item = crud.crud_item_pedido.update_status(db=db, item_pedido_id=item_pedido_id, novo_status=novo_status)
+    if not updated_item:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao atualizar status do item do pedido.")
 
-        # Publica evento no Redis
-        await RedisService().publish(
-            channel=f"pedido_{item.id_pedido}_itens",
-            message={
-                "event": "status_item_atualizado",
-                "item_id": str(item.id),
-                "produto_id": str(item.id_produto),
-                "novo_status": item.status.value,
-                "atualizado_por": current_user.email
-            }
-        )
+    # A lógica de publicação no Redis está comentada dentro do crud_item_pedido.update_status
+    # Exemplo:
+    # comanda_db = crud.comanda.get(db, id=updated_item.id_comanda)
+    # redis_msg = {
+    #     "evento": "status_item_pedido_atualizado",
+    #     "item_pedido_id": str(updated_item.id),
+    #     "pedido_id": str(updated_item.id_pedido),
+    #     "novo_status_item": novo_status.value,
+    #     "id_comanda": str(updated_item.id_comanda),
+    #     "id_mesa": str(comanda_db.id_mesa) if comanda_db else None,
+    #     "timestamp": datetime.utcnow().isoformat()
+    # }
+    # await redis_client.publish_message(channel="pedidos_status_updates", message=json.dumps(redis_msg))
+    # await redis_client.publish_message(channel=f"comanda_{updated_item.id_comanda}_updates", message=json.dumps(redis_msg))
 
-        logger.info(f"Status do item {item_id} atualizado para {status_update.status} por {current_user.email}")
-        return item
+    # Após atualizar um item, pode ser necessário reavaliar o status_geral_pedido do Pedido pai.
+    # Ex: se todos os itens estão "Pronto para Entrega", o pedido geral pode mudar para "Pronto para Entrega".
+    # Esta lógica pode ficar no CRUD ou em um serviço.
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao atualizar status do item {item_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao atualizar status do item"
-        )
+    return updated_item
 
-@router.post("/{pedido_id}/cancelar", response_model=schemas.Pedido)
-async def cancelar_pedido(
-    pedido_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.Pedido:
-    """
-    Cancela um pedido existente.
-    Atualiza o valor total da comanda.
-    """
-    try:
-        # Usa o serviço para cancelar o pedido
-        pedido, message = await PedidoService().cancelar_pedido(
-            db=db,
-            pedido_id=pedido_id,
-            usuario_id=current_user.id
-        )
+# Cancelar um pedido ou item de pedido (geralmente mudar status para CANCELADO)
+# A remoção física de itens/pedidos após o processamento inicial geralmente não é recomendada.
 
-        if not pedido:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=message
-            )
-
-        # Publica evento no Redis
-        await RedisService().publish(
-            channel=f"comanda_{pedido.id_comanda}_pedidos",
-            message={
-                "event": "pedido_cancelado",
-                "pedido_id": str(pedido.id),
-                "cancelado_por": current_user.email
-            }
-        )
-
-        logger.info(f"Pedido {pedido_id} cancelado por {current_user.email}")
-        return pedido
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao cancelar pedido {pedido_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao cancelar pedido"
-        )

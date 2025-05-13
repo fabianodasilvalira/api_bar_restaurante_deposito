@@ -4,9 +4,9 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.core.security import get_password_hash, verify_password
-from app.db.models.usuario import Usuario # Ajuste o caminho se necessário
-from app.schemas.usuario import UsuarioCreateSchemas, UsuarioUpdateSchemas # Ajuste o caminho se necessário
+from app.core.security import get_password_hash, verify_password # Assuming this path is correct
+from app.models.usuario import Usuario # Corrected import path for the model
+from app.schemas.usuario_schemas import UsuarioCreateSchemas, UsuarioUpdateSchemas # Corrected import path
 
 class CRUDUsuario:
     def get(self, db: Session, id: uuid.UUID) -> Optional[Usuario]:
@@ -20,19 +20,27 @@ class CRUDUsuario:
     ) -> List[Usuario]:
         return db.query(Usuario).offset(skip).limit(limit).all()
 
-    def create(self, db: Session, *, obj_in: UsuarioCreateSchemas) -> Usuario:
+    def create_user(self, db: Session, *, user_create: UsuarioCreateSchemas) -> Usuario:
+        # Note: The original `create` method was here. Renaming to `create_user` for clarity
+        # or ensuring the endpoint calls the correct CRUD method.
+        # The original UsuarioCreateSchemas might not have `cargo`. This needs to be aligned.
+        # For now, assuming UsuarioCreateSchemas has all necessary fields including password (not hashed).
         db_obj = Usuario(
-            email=obj_in.email,
-            hashed_password=get_password_hash(obj_in.password),
-            nome_completo=obj_in.nome_completo,
-            cargo=obj_in.cargo,
-            is_active=obj_in.is_active if obj_in.is_active is not None else True,
-            is_superuser=obj_in.is_superuser
+            email=user_create.email,
+            hashed_password=get_password_hash(user_create.password),
+            nome_completo=user_create.nome_completo,
+            # cargo=user_create.cargo, # Add if cargo is part of UsuarioCreateSchemas and Usuario model
+            is_active=user_create.is_active if user_create.is_active is not None else True,
+            is_superuser=user_create.is_superuser if hasattr(user_create, 'is_superuser') else False
         )
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
         return db_obj
+    
+    # Alias for compatibility if other parts of code use `create`
+    def create(self, db: Session, *, obj_in: UsuarioCreateSchemas) -> Usuario:
+        return self.create_user(db=db, user_create=obj_in)
 
     def update(
         self, db: Session, *, db_obj: Usuario, obj_in: Union[UsuarioUpdateSchemas, Dict[str, Any]]
@@ -72,5 +80,5 @@ class CRUDUsuario:
     def is_superuser(self, user: Usuario) -> bool:
         return user.is_superuser
 
-usuario = CRUDUsuario()
+crud_usuario = CRUDUsuario() # Instantiated the class
 

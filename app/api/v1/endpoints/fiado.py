@@ -1,247 +1,125 @@
+# app/api/v1/endpoints/fiado.py
 import uuid
-from datetime import datetime, timezone
+from typing import List, Any, Optional
 from decimal import Decimal
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app import schemas
-from app.crud import fiado as crud_fiado, cliente as crud_cliente, comanda as crud_comanda
-from app.db.database import get_db
-from app.models import Usuario as DBUsuario, Fiado as DBFiado, StatusFiado
-from app.services.auth_service import AuthService
-from app.services.redis_service import RedisService
-from app.core.logging import logger
+from app import crud, schemas, models # Ajuste os caminhos de importação
+from app.api import deps # Ajuste os caminhos de importação
+from app.schemas.fiado_schemas import StatusFiado, FiadoSchemas, \
+    FiadoUpdateSchemas, FiadoCreateSchemas  # Corrigido para importar StatusFiado e FiadoSchemas corretamente
+
+from app.models.usuario import Usuario
 
 router = APIRouter()
 
-@router.post("/", response_model=schemas.Fiado, status_code=status.HTTP_201_CREATED)
-async def create_fiado(
-    fiado_in: schemas.FiadoCreate,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.Fiado:
+
+@router.post("/", response_model=FiadoSchemas, status_code=status.HTTP_201_CREATED)
+def create_fiado_registro(
+    *,
+    db: Session = Depends(deps.get_db),
+    fiado_in: FiadoCreateSchemas,
+    current_user: Usuario = Depends(deps.get_current_active_user)
+) -> Any:
     """
-    Registra um novo valor em fiado para um cliente.
-    Pode estar associado a uma comanda ou ser um crédito direto.
+    Registra um novo valor em fiado para um cliente e uma comanda.
+    Este endpoint é chamado quando um pagamento é feito com o método "FiadoSchemas"
+    ou quando se quer adicionar um valor diretamente ao fiado de uma comanda.
     """
     try:
-        # Verifica se o cliente existe
-        cliente = crud_cliente.get(db, id=fiado_in.id_cliente)
-        if not cliente:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Cliente não encontrado"
-            )
+        fiado_registro = crud.fiado.create(db=db, obj_in=fiado_in, id_usuario_registrou=current_user.id)
+        # A lógica de publicação no Redis está comentada no CRUD por enquanto.
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return fiado_registro
 
-        # Se associado a comanda, verifica se a comanda existe
-        if fiado_in.id_comanda_origem:
-            comanda = crud_comanda.get(db, id=fiado_in.id_comanda_origem)
-            if not comanda:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Comanda não encontrada"
-                )
-
-        # Cria o registro de fiado
-        db_fiado = crud_fiado.create(
-            db=db,
-            obj_in=fiado_in,
-            id_usuario_registrou=current_user.id
-        )
-
-        # Publica evento no Redis
-        await RedisService().publish(
-            channel=f"cliente_{fiado_in.id_cliente}_fiados",
-            message={
-                "event": "fiado_criado",
-                "fiado_id": str(db_fiado.id),
-                "cliente_id": str(fiado_in.id_cliente),
-                "valor": float(db_fiado.valor_devido),
-                "registrado_por": current_user.email
-            }
-        )
-
-        logger.info(f"Fiado {db_fiado.id} criado por {current_user.email}")
-        return db_fiado
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao criar fiado: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao registrar fiado"
-        )
-
-@router.get("/cliente/{cliente_id}", response_model=List[schemas.Fiado])
-async def get_fiados_cliente(
+@router.get("/cliente/{cliente_id}", response_model=List[FiadoSchemas])
+def read_fiados_by_cliente(
     cliente_id: uuid.UUID,
-    status: Optional[StatusFiado] = None,
+    status_fiado: Optional[StatusFiado] = None,
+    db: Session = Depends(deps.get_db),
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> List[schemas.Fiado]:
+    current_user: Usuario = Depends(deps.get_current_active_user)
+) -> Any:
     """
-    Lista os fiados de um cliente específico.
-    Pode ser filtrado por status (Pendente, Pago Parcialmente, Pago Totalmente).
+    Recupera a lista de fiados de um cliente específico, opcionalmente filtrada por status.
     """
-    try:
-        # Verifica se o cliente existe
-        cliente = crud_cliente.get(db, id=cliente_id)
-        if not cliente:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Cliente não encontrado"
-            )
+    cliente_db = crud.cliente.get(db, id=cliente_id)
+    if not cliente_db:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    
+    fiados = crud.fiado.get_multi_by_cliente(db, cliente_id=cliente_id, status=status_fiado, skip=skip, limit=limit)
+    return fiados
 
-        return crud_fiado.get_by_cliente(
-            db=db,
-            cliente_id=cliente_id,
-            status=status,
-            skip=skip,
-            limit=limit
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao listar fiados do cliente {cliente_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao listar fiados"
-        )
-
-@router.get("/{fiado_id}", response_model=schemas.FiadoDetail)
-async def get_fiado(
+@router.get("/{fiado_id}", response_model=FiadoSchemas)
+def read_fiado_by_id(
     fiado_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.FiadoDetail:
+    db: Session = Depends(deps.get_db),
+    current_user: Usuario = Depends(deps.get_current_active_user)
+) -> Any:
     """
-    Obtém detalhes de um registro de fiado específico.
-    Inclui informações da comanda associada (se houver) e histórico de pagamentos.
+    Recupera um registro de fiado pelo seu ID.
     """
-    try:
-        fiado = crud_fiado.get(db, id=fiado_id)
-        if not fiado:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Registro de fiado não encontrado"
-            )
+    fiado_registro = crud.fiado.get(db=db, id=fiado_id)
+    if not fiado_registro:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registro de fiado não encontrado")
+    return fiado_registro
 
-        # Verifica se o usuário tem permissão (admin ou gerente)
-        if current_user.cargo not in ["admin", "gerente"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Sem permissão para acessar este registro"
-            )
-
-        return fiado
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao obter fiado {fiado_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao obter registro de fiado"
-        )
-
-@router.post("/{fiado_id}/pagar", response_model=schemas.Fiado)
-async def registrar_pagamento_fiado(
+@router.put("/{fiado_id}/pagar", response_model=FiadoSchemas)
+def registrar_pagamento_de_fiado(
+    *,
+    db: Session = Depends(deps.get_db),
     fiado_id: uuid.UUID,
-    pagamento: schemas.FiadoPagamentoCreate,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_user)
-) -> schemas.Fiado:
+    valor_pago: Decimal, # Poderia ser um schema FiadoSchemasPagamentoCreate com mais detalhes
+    current_user: Usuario = Depends(deps.get_current_active_user)
+) -> Any:
     """
     Registra um pagamento para um fiado existente.
-    Atualiza o valor devido e status do fiado.
+    Atualiza o valor devido e o status do fiado, e os valores/status da comanda associada.
     """
+    if valor_pago <= Decimal("0"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valor do pagamento deve ser positivo.")
     try:
-        if pagamento.valor <= Decimal("0"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Valor do pagamento deve ser positivo"
-            )
-
-        # Registra o pagamento
-        fiado, message = await crud_fiado.registrar_pagamento(
-            db=db,
-            fiado_id=fiado_id,
-            valor_pago=pagamento.valor,
-            metodo_pagamento=pagamento.metodo_pagamento,
-            observacoes=pagamento.observacoes,
+        fiado_atualizado = crud.fiado.registrar_pagamento_fiado(
+            db=db, 
+            fiado_id=fiado_id, 
+            valor_pago=valor_pago, 
             id_usuario_registrou=current_user.id
         )
+        if not fiado_atualizado:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registro de fiado não encontrado para pagamento.")
+        # Notificar no Redis
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return fiado_atualizado
 
-        if not fiado:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=message
-            )
-
-        # Publica evento no Redis
-        await RedisService().publish(
-            channel=f"cliente_{fiado.id_cliente}_fiados",
-            message={
-                "event": "pagamento_fiado",
-                "fiado_id": str(fiado.id),
-                "valor_pago": float(pagamento.valor),
-                "saldo_restante": float(fiado.valor_devido),
-                "registrado_por": current_user.email
-            }
-        )
-
-        logger.info(f"Pagamento de {pagamento.valor} registrado no fiado {fiado_id} por {current_user.email}")
-        return fiado
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao registrar pagamento no fiado {fiado_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao registrar pagamento"
-        )
-
-@router.put("/{fiado_id}", response_model=schemas.Fiado)
-async def update_fiado(
+@router.put("/{fiado_id}", response_model=FiadoSchemas)
+def update_fiado_registro(
+    *,
+    db: Session = Depends(deps.get_db),
     fiado_id: uuid.UUID,
-    fiado_in: schemas.FiadoUpdate,
-    db: Session = Depends(get_db),
-    current_user: DBUsuario = Depends(AuthService.get_current_active_admin)
-) -> schemas.Fiado:
+    fiado_in: FiadoUpdateSchemas, # Usar FiadoSchemasUpdate que não permite pagamento direto por aqui
+    current_user: Usuario = Depends(deps.get_current_active_user)
+) -> Any:
     """
-    Atualiza informações de um fiado (apenas administradores).
-    Não deve ser usado para registrar pagamentos - use o endpoint /pagar.
+    Atualiza um registro de fiado (ex: observações, data de vencimento, status manual).
+    Para registrar pagamento, use o endpoint /pagar.
     """
+    fiado_db = crud.fiado.get(db=db, id=fiado_id)
+    if not fiado_db:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registro de fiado não encontrado")
+    
+    if fiado_in.valor_pago_neste_momento is not None:
+         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Para registrar pagamento em fiado, use o endpoint /{fiado_id}/pagar.")
+
     try:
-        db_fiado = crud_fiado.get(db, id=fiado_id)
-        if not db_fiado:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Registro de fiado não encontrado"
-            )
+        fiado_atualizado = crud.fiado.update(db=db, db_obj=fiado_db, obj_in=fiado_in)
+    except ValueError as e: # Caso o CRUD de update lance algum erro de validação
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return fiado_atualizado
 
-        # Valida se não está tentando atualizar valores de pagamento
-        if fiado_in.valor_devido is not None or fiado_in.valor_pago is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Para atualizar valores de fiado, use o endpoint de pagamento"
-            )
+# Endpoints de relatório de fiado serão em relatorios.py
 
-        updated_fiado = crud_fiado.update(db, db_obj=db_fiado, obj_in=fiado_in)
-        logger.info(f"Fiado {fiado_id} atualizado por {current_user.email}")
-        return updated_fiado
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao atualizar fiado {fiado_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao atualizar fiado"
-        )

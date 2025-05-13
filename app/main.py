@@ -45,8 +45,6 @@ if settings.ENVIRONMENT == "development":
             await conn.run_sync(base_class.Base.metadata.create_all)
         logger.info("Tabelas criadas com sucesso (apenas em desenvolvimento)")
 
-# Inclui rota para arquivos estáticos se necessário (ex: QR codes)
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Inclui todas as rotas da API V1
 app.include_router(api_router_v1, prefix=settings.API_V1_STR)

@@ -4,7 +4,6 @@ from sqlalchemy.orm import relationship
 import enum
 
 from app.db.base_class import Base
-from app.db.models.cliente import Cliente # Para o relacionamento
 
 class StatusMesa(str, enum.Enum):
     DISPONIVEL = "Disponível"

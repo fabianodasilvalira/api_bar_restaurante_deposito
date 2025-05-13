@@ -1,3 +1,4 @@
+from asyncio.log import logger
 from datetime import datetime, timezone
 import uuid
 import json
@@ -6,19 +7,17 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from app.crud.crud_pedido import CRUDPedido
 from app.models import Pedido, ItemPedido, Comanda, Produto, Usuario, Mesa
 from app.schemas import (
-    PedidoCreate,
-    PedidoUpdate,
+    PedidoCreateSchemas,
+    PedidoUpdateSchemas,
     ItemPedidoCreate,
     ItemPedidoUpdate,
     PedidoStatusUpdate
 )
 from app.crud.base import CRUDBase
-from app.db.database import get_db
-from app.services.auth_service import AuthService
 from app.services.redis_service import RedisService
-from app.core.logging import logger
 
 
 class PedidoService:
@@ -29,7 +28,7 @@ class PedidoService:
     async def criar_pedido(
             self,
             db: Session,
-            pedido_in: PedidoCreate,
+            pedido_in: PedidoCreateSchemas,
             current_user: Usuario
     ) -> Tuple[Optional[Pedido], Optional[str]]:
         """
@@ -230,7 +229,7 @@ class PedidoService:
         return None
 
 
-class CRUDPedidoService(CRUDBase[Pedido, PedidoCreate, PedidoUpdate]):
+class CRUDPedidoService(CRUDBase[Pedido, PedidoCreateSchemas, PedidoUpdateSchemas]):
     """CRUD específico para Pedidos com operações adicionais"""
 
     def get_by_comanda(self, db: Session, comanda_id: uuid.UUID) -> List[Pedido]:

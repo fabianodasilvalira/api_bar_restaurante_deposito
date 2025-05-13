@@ -10,4 +10,4 @@ redis
 qrcode[pil]
 pydantic-settings
 python-multipart
-
+asyncpg

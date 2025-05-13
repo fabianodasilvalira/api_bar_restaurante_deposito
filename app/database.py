@@ -1,20 +1,32 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+# app/database.py
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+
 from app.core.config import settings
 
-SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
+# Define o motor de banco de dados assíncrono
+engine = create_async_engine(settings.DATABASE_URL, echo=True if settings.ENVIRONMENT == "development" else False)
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# Cria uma fábrica de sessões assíncronas
+AsyncSessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+    class_=AsyncSession
+)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
+# Base para os modelos SQLAlchemy declarativos
 Base = declarative_base()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Dependência para obter uma sessão de banco de dados
+async def get_db() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 

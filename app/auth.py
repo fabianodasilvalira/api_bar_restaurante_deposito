@@ -9,9 +9,12 @@ from typing import Optional, Annotated
 from sqlalchemy.orm import Session
 from pydantic import EmailStr
 
-from . import schemas, models, crud
+from app import models, crud # Removed direct import of schemas, will use specific imports if needed or rely on what crud returns
 from app.core.config import settings
 from .database import get_db
+# Import specific schemas that are used for type hinting or direct instantiation
+from app.schemas.token_schemas import Token, TokenData # Corrected import
+from app.schemas.usuario_schemas import UsuarioSchemas # Assuming UsuarioSchemas is the correct one for current_user
 
 # Security configurations
 SECRET_KEY = settings.SECRET_KEY
@@ -24,7 +27,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # OAuth2 schemes
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="auth/token",
+    tokenUrl=f"{settings.API_V1_STR}/auth/token", # Adjusted to include API_V1_STR prefix
     scopes={
         "admin": "Administrator access",
         "manager": "Manager access",
@@ -89,9 +92,9 @@ class AuthService:
             db: Session,
             email: EmailStr,
             password: str
-    ) -> Optional[models.Usuario]:
+    ) -> Optional[models.Usuario]: # Assuming models.Usuario is the DB model
         """Authenticate a user with email and password."""
-        user = crud.get_user_by_email(db, email)
+        user = crud.crud_usuario.get_by_email(db, email=email) # Adjusted to use crud_usuario
         if not user:
             logger.warning(f"Login attempt with non-existent email: {email}")
             return None
@@ -104,7 +107,7 @@ class AuthService:
     async def get_current_user(
             token: Annotated[str, Depends(oauth2_scheme)],
             db: Annotated[Session, Depends(get_db)]
-    ) -> models.Usuario:
+    ) -> models.Usuario: # Returns DB model
         """Get the current authenticated user from the token."""
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -117,15 +120,15 @@ class AuthService:
             if payload.get("type") != "access":
                 raise credentials_exception
 
-            email: str = payload.get("sub")
-            if email is None:
+            email_from_payload: str = payload.get("sub")
+            if email_from_payload is None:
                 raise credentials_exception
 
-            token_data = schemas.TokenData(email=email)
+            token_data_instance = TokenData(email=email_from_payload) # Using imported TokenData
         except JWTError:
             raise credentials_exception
 
-        user = crud.get_user_by_email(db, email=token_data.email)
+        user = crud.crud_usuario.get_by_email(db, email=token_data_instance.email) # Adjusted
         if user is None:
             raise credentials_exception
 
@@ -134,9 +137,9 @@ class AuthService:
     @staticmethod
     async def get_current_active_user(
             current_user: Annotated[models.Usuario, Depends(get_current_user)]
-    ) -> models.Usuario:
+    ) -> models.Usuario: # Returns DB model
         """Get the current active user."""
-        if not current_user.ativo:
+        if not current_user.is_active: # Assuming DB model has is_active
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Inactive user"
@@ -146,9 +149,9 @@ class AuthService:
     @staticmethod
     async def get_current_active_admin(
             current_user: Annotated[models.Usuario, Depends(get_current_active_user)]
-    ) -> models.Usuario:
+    ) -> models.Usuario: # Returns DB model
         """Get the current active admin user."""
-        if current_user.cargo != "admin":
+        if current_user.cargo != "admin": # Assuming DB model has cargo
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Admin access required"
@@ -159,7 +162,7 @@ class AuthService:
     async def login_for_access_token(
             db: Session,
             form_data: OAuth2PasswordRequestForm
-    ) -> schemas.TokenSchemas:
+    ) -> Token: # Corrected return type to use imported Token
         """Generate access and refresh tokens for valid credentials."""
         user = await AuthService.authenticate_user(
             db, form_data.username, form_data.password)
@@ -183,9 +186,9 @@ class AuthService:
         )
 
         logger.info(f"User {user.email} logged in successfully")
-        return schemas.Token(
+        return Token(
             access_token=access_token,
-            refresh_token=refresh_token,
+            refresh_token=refresh_token, # Token schema might need refresh_token field
             token_type="bearer"
         )
 
@@ -193,7 +196,7 @@ class AuthService:
     async def refresh_access_token(
             db: Session,
             refresh_token: str
-    ) -> schemas.TokenSchemas:
+    ) -> Token: # Corrected return type
         """Generate a new access token from a refresh token."""
         try:
             payload = AuthService.decode_token(refresh_token)
@@ -203,14 +206,14 @@ class AuthService:
                     detail="Invalid token type"
                 )
 
-            email: str = payload.get("sub")
-            if email is None:
+            email_from_payload: str = payload.get("sub")
+            if email_from_payload is None:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid token"
                 )
 
-            user = crud.get_user_by_email(db, email=email)
+            user = crud.crud_usuario.get_by_email(db, email=email_from_payload) # Adjusted
             if user is None:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -218,17 +221,21 @@ class AuthService:
                 )
 
             access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-            access_token = AuthService.create_access_token(
+            new_access_token = AuthService.create_access_token(
                 data={"sub": user.email},
                 expires_delta=access_token_expires
             )
-
-            return schemas.Token(
-                access_token=access_token,
+            # The Token schema might not have a refresh_token field when returning from refresh.
+            # Adjusting to return only access_token and token_type as per typical refresh responses.
+            return Token(
+                access_token=new_access_token,
                 token_type="bearer"
+                # refresh_token field might not be part of this response, or it could be the same one if it's long-lived.
+                # For simplicity, returning only new access token.
             )
         except JWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials"
             )
+

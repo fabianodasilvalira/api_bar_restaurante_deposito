@@ -8,8 +8,8 @@ from sqlalchemy import func
 
 from app.db.models.pedido import Pedido, ItemPedido, StatusPedido
 from app.db.models.produto import Produto # Para buscar preço do produto
-from app.db.models.comanda import Comanda # Para associar e recalcular comanda
-from app.schemas.pedido import PedidoCreate, PedidoUpdate, ItemPedidoCreate, ItemPedidoUpdate
+from app.db.models.comanda import Comanda, StatusComanda  # Para associar e recalcular comanda
+from app.schemas.pedido import PedidoCreateSchemas, PedidoUpdateSchemas, ItemPedidoCreateSchemas, ItemPedidoUpdateSchemas
 from app.crud.crud_comanda import comanda as crud_comanda # Para recalcular comanda
 # from app.services.redis_service import redis_client # Para publicar eventos
 # import json
@@ -22,7 +22,7 @@ class CRUDItemPedido:
     def get_multi_by_pedido(self, db: Session, *, pedido_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[ItemPedido]:
         return db.query(ItemPedido).filter(ItemPedido.id_pedido == pedido_id).offset(skip).limit(limit).all()
 
-    def create(self, db: Session, *, obj_in: ItemPedidoCreate, pedido_id: uuid.UUID, comanda_id: uuid.UUID) -> ItemPedido:
+    def create(self, db: Session, *, obj_in: ItemPedidoCreateSchemas, pedido_id: uuid.UUID, comanda_id: uuid.UUID) -> ItemPedido:
         produto = db.query(Produto).filter(Produto.id == obj_in.id_produto).first()
         if not produto:
             raise ValueError(f"Produto com ID {obj_in.id_produto} não encontrado.")
@@ -84,7 +84,7 @@ class CRUDPedido:
     def get_multi_by_comanda(self, db: Session, *, comanda_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[Pedido]:
         return db.query(Pedido).filter(Pedido.id_comanda == comanda_id).order_by(Pedido.data_criacao.desc()).offset(skip).limit(limit).all()
 
-    def create(self, db: Session, *, obj_in: PedidoCreate, id_usuario_registrou: Optional[uuid.UUID]) -> Pedido:
+    def create(self, db: Session, *, obj_in: PedidoCreateSchemas, id_usuario_registrou: Optional[uuid.UUID]) -> Pedido:
         comanda = db.query(Comanda).filter(Comanda.id == obj_in.id_comanda).first()
         if not comanda:
             raise ValueError(f"Comanda com ID {obj_in.id_comanda} não encontrada.")
